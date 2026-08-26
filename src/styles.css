@@ -1,0 +1,584 @@
+/* ============================================================================
+   OWE Auto Commissions — design system
+   Register: precise instrument. Money moves through this screen and the actions
+   are irreversible, so density is a feature and nothing decorative competes with
+   a number. Primary is reserved for interaction; saturation for money.
+
+   Theming is token-level: components style through vars and never inside a
+   media query, so the toggle wins in both directions.
+   ============================================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap");
+
+/* ── LIGHT (the complete palette lives here) ─────────────────────────────── */
+:root{
+  --bg:#f5f7f9;
+  --panel:#ffffff;
+  --panel-2:#fafbfc;
+  --ink:#0d1520;
+  --ink-2:#41505f;
+  --ink-3:#78889a;
+  --line:#e4e9ee;
+  --line-2:#cfd8e0;
+
+  /* rail — white in light mode */
+  --rail-bg:#ffffff;
+  --rail-ink:#0d1520;
+  --rail-ink-2:#68788a;
+  --rail-line:#e4e9ee;
+  --rail-hover:#f1f5f8;
+  --rail-active:#e6f1f7;
+  --rail-seg:#f1f5f8;
+  --rail-seg-on:#ffffff;
+  --rail-cnt:#eaeff4;
+  --rail-cnt-ink:#5d6e80;
+
+  /* primary — interaction only, never decoration */
+  --pri:#036b96;
+  --pri-hi:#025a80;
+  --pri-soft:#e6f1f7;
+  --pri-line:#a8cfe3;
+  --pri-ink:#ffffff;
+
+  /* money semantics — kept separate from primary on purpose */
+  --due:#0e7c5a;   --due-bg:#e6f4ee;
+  --pend:#a1620a;  --pend-bg:#fdf3e0;
+  --held:#b03030;  --held-bg:#fdeceb;
+  --inert:#5a6675; --inert-bg:#eef0f4;
+
+  --thead-bg:#036b96;
+  --thead-ink:#ffffff;
+  --code-bg:#f7f9fb;
+
+  --shadow:0 1px 2px rgba(13,21,32,.04), 0 1px 3px rgba(13,21,32,.06);
+  --shadow-lg:0 14px 38px rgba(13,21,32,.16);
+
+  --r:10px; --r-lg:14px;
+  --ui:"Inter",-apple-system,"Segoe UI",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --rail:258px;
+  --logo-lift:none;
+}
+
+/* ── DARK — only the tokens are redefined ────────────────────────────────── */
+:root[data-theme="dark"]{
+  --bg:#0b1017;
+  --panel:#131a24;
+  --panel-2:#101720;
+  --ink:#e8edf3;
+  --ink-2:#a2b1c2;
+  --ink-3:#6f8296;
+  --line:#1f2935;
+  --line-2:#2c3846;
+
+  --rail-bg:#0d131b;
+  --rail-ink:#e8edf3;
+  --rail-ink-2:#7f91a5;
+  --rail-line:#1c2530;
+  --rail-hover:#161f2a;
+  --rail-active:#0d2f42;
+  --rail-seg:#080d13;
+  --rail-seg-on:#1d2836;
+  --rail-cnt:#212d3b;
+  --rail-cnt-ink:#93a4b8;
+
+  --pri:#2b9fd0;
+  --pri-hi:#43b0dd;
+  --pri-soft:#0d2f42;
+  --pri-line:#1a5b7d;
+  --pri-ink:#04121a;
+
+  --due:#4fc294;   --due-bg:#0e2a20;
+  --pend:#d9a441;  --pend-bg:#2d2210;
+  --held:#e0736f;  --held-bg:#2e1517;
+  --inert:#8899ab; --inert-bg:#1a222d;
+
+  --thead-bg:#0a1017;
+  --thead-ink:#8fa3b8;
+  --code-bg:#0e151d;
+
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 1px 3px rgba(0,0,0,.24);
+  --shadow-lg:0 14px 38px rgba(0,0,0,.5);
+  --logo-lift:brightness(1.12);
+}
+:root[data-theme="light"]{ color-scheme:light }
+:root[data-theme="dark"]{ color-scheme:dark }
+
+*{box-sizing:border-box}
+html,body,#root{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:400 13.5px/1.5 var(--ui);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  transition:background .15s,color .15s}
+a{color:var(--pri);text-decoration:none}
+a:hover{text-decoration:underline}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--pri);outline-offset:2px;border-radius:6px}
+
+.app{display:grid;grid-template-columns:var(--rail) minmax(0,1fr);min-height:100vh}
+.app.mini{--rail:64px}
+/* min-width:0 lets the grid track actually honour 64px — without it a wide
+   flex child can push the track past its declared width. */
+.app.mini .side{min-width:0;overflow-x:hidden}
+
+/* ── rail ─────────────────────────────────────────────────────────────────── */
+.side{background:var(--rail-bg);color:var(--rail-ink);position:sticky;top:0;height:100vh;
+  display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--rail-line)}
+/* Brand block. The lockup is fixed-colour by design — a logo that shifts hue with
+   the theme stops being the logo. In dark mode the green/blue both clear contrast
+   on the near-black rail, so only a slight lift is needed. */
+.brandrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px 12px 12px 16px}
+.app.mini .brandrow{flex-direction:column;padding:14px 0 10px;gap:10px}
+
+.brand{display:flex;align-items:center;min-width:0}
+.brand .logo-full{display:block;line-height:0}
+.brand .logo-mark{display:none;line-height:0}
+.app.mini .brand .logo-full{display:none}
+.app.mini .brand .logo-mark{display:block}
+/* Lift via a token so it follows the same three-state rule as everything else. */
+.brand svg{filter:var(--logo-lift)}
+
+.appname{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--rail-ink-2);
+  font-weight:700;padding:0 17px 14px;border-bottom:1px solid var(--rail-line);margin-bottom:2px}
+.app.mini .appname{display:none}
+
+.railtools{display:flex;gap:6px;flex:0 0 auto}
+.itool{flex:0 0 auto;border:1px solid var(--rail-line);background:transparent;color:var(--rail-ink-2);
+  border-radius:8px;padding:6px 8px;cursor:pointer;display:grid;place-items:center;transition:.12s;line-height:0}
+.itool:hover{background:var(--rail-hover);color:var(--rail-ink);border-color:var(--line-2)}
+
+.eco{margin:12px;padding:3px;background:var(--rail-seg);border:1px solid var(--rail-line);
+  border-radius:10px;display:flex;gap:2px}
+.eco button{flex:1;border:0;background:transparent;color:var(--rail-ink-2);border-radius:7px;
+  padding:7px 4px;font-size:11.5px;font-weight:600;cursor:pointer;transition:.12s}
+.eco button:hover{color:var(--rail-ink)}
+.eco button.on{background:var(--rail-seg-on);color:var(--pri);box-shadow:var(--shadow)}
+.app.mini .eco{display:none}
+/* The header copy of the toggle — only exists once the rail can't carry it:
+   collapsed rail (.mini) or the tablet breakpoint below. */
+.eco-inline{display:none;margin:0;padding:2px}
+.eco-inline button{flex:0 0 auto;padding:5px 10px;font-size:11px}
+.app.mini .headrow .eco-inline{display:inline-flex}
+
+.navscroll{flex:1;overflow-y:auto;padding:4px 10px 18px}
+.navscroll::-webkit-scrollbar{width:6px}
+.navscroll::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px}
+.grp-h{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:700;padding:15px 8px 6px}
+.app.mini .grp-h{opacity:0;height:12px;padding:0}
+
+.navitem{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;
+  color:var(--rail-ink-2);font-size:13px;font-weight:500;cursor:pointer;border:0;background:transparent;
+  width:100%;text-align:left;margin-bottom:1px;transition:.11s;position:relative}
+.navitem:hover{background:var(--rail-hover);color:var(--rail-ink)}
+.navitem.on{background:var(--rail-active);color:var(--pri);font-weight:600}
+.navitem.on::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:2.5px;
+  background:var(--pri);border-radius:0 2px 2px 0}
+.navitem .ic{width:17px;flex:0 0 17px;display:grid;place-items:center;opacity:.8}
+.navitem.on .ic{opacity:1}
+.navlabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app.mini .navlabel{display:none}
+/* Collapsed: the icon is the whole item, so the label's gap and the side
+   padding have to go or the 64px rail overflows and scrolls sideways. */
+.app.mini .navscroll{padding:4px 0 18px;overflow-x:hidden}
+.app.mini .navitem{justify-content:center;gap:0;padding:9px 0}
+.navitem .cnt{margin-left:auto;font-family:var(--mono);font-size:10.5px;font-weight:700;
+  background:var(--pend);color:#fff;border-radius:999px;padding:1.5px 7px;flex:0 0 auto;
+  box-shadow:0 0 0 1px var(--rail-bg);min-width:9px;text-align:center}
+.navitem.on .cnt{background:var(--pri);color:#fff;box-shadow:0 0 0 1px var(--rail-active)}
+:root[data-theme="dark"] .navitem .cnt{color:#1a1206}
+.app.mini .navitem .cnt{position:absolute;top:4px;right:4px;padding:0;min-width:8px;height:8px;
+  border-radius:50%;font-size:0;background:var(--pend);box-shadow:0 0 0 2px var(--rail-bg)}
+.app.mini .navitem.on .cnt{background:var(--pri)}
+
+.railfoot{border-top:1px solid var(--rail-line);padding:11px 14px;display:flex;align-items:center;gap:9px}
+.avatar{width:27px;height:27px;border-radius:50%;flex:0 0 27px;background:var(--pri-soft);color:var(--pri);
+  display:grid;place-items:center;font-size:10.5px;font-weight:700}
+.railfoot .em{font-size:11px;color:var(--rail-ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app.mini .railfoot .em{display:none}
+.app.mini .railfoot{padding:11px 0;justify-content:center;gap:0}
+
+/* ── page ─────────────────────────────────────────────────────────────────── */
+main{min-width:0;display:flex;flex-direction:column}
+.pagehead{position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--line);padding:18px 26px 15px}
+.eyebrow{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-bottom:4px}
+.pagehead h1{margin:0;font-size:20px;font-weight:650;letter-spacing:-.02em}
+.headrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.headrow .sp{flex:1}
+.count{font-family:var(--mono);font-size:11.5px;font-weight:500;color:var(--ink-2);
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 11px}
+.pagebody{padding:20px 26px 64px}
+.sub{color:var(--ink-2);font-size:12.5px;line-height:1.65;max-width:104ch;margin:0 0 18px}
+.sub b{color:var(--ink);font-weight:600}
+
+/* ── surface ──────────────────────────────────────────────────────────────── */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.card-h{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.card-h h2{margin:0;font-size:13px;font-weight:650;letter-spacing:-.005em}
+.card-h .sp{flex:1}
+.card-b{padding:16px 18px}
+.card-b.flush{padding:0}
+.stub{color:var(--ink-3);font-size:12.5px;padding:28px 18px;text-align:center}
+
+/* ── async states ─────────────────────────────────────────────────────────── */
+.sk{display:inline-block;height:11px;border-radius:4px;max-width:100%;
+  background:linear-gradient(90deg,var(--line) 25%,var(--panel-2) 37%,var(--line) 63%);
+  background-size:400% 100%;animation:shimmer 1.4s ease infinite}
+@keyframes shimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
+
+/* A failed read is stated as a failure, in the money-warning colour — never as
+   an empty list, which on this app would read as "nothing to pay". */
+.errstate{padding:26px 20px;text-align:center;color:var(--ink-2)}
+.errstate-h{font-size:13.5px;font-weight:650;color:var(--held);margin-bottom:5px}
+.errstate-m{font-size:12.5px;color:var(--ink-2);max-width:520px;margin:0 auto;line-height:1.6}
+.errstate-hint{font-size:11.5px;color:var(--ink-3);margin-top:9px}
+.errstate-hint code{font-family:var(--mono);background:var(--code-bg);padding:1px 5px;border-radius:4px}
+
+/* A refresh keeps the old rows and dims them, rather than blinking to a
+   spinner — the numbers you were reading stay readable. */
+.refreshing{opacity:.55;transition:opacity .15s;pointer-events:none}
+
+.pager{display:flex;align-items:center;gap:10px;padding:11px 18px;border-top:1px solid var(--line);
+  flex-wrap:wrap}
+.pager-n{font-size:12px;color:var(--ink-3)}
+.pager-p{font-size:12px;color:var(--ink-2);font-weight:550}
+
+/* ── metrics ──────────────────────────────────────────────────────────────── */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;
+  text-align:left;cursor:pointer;position:relative;box-shadow:var(--shadow);transition:.13s;color:var(--ink)}
+.kpi:hover{border-color:var(--line-2);transform:translateY(-1px)}
+.kpi .k{font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.kpi .v{font-family:var(--mono);font-size:23px;font-weight:600;letter-spacing:-.03em;margin-top:6px;
+  line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi .c{font-size:11px;color:var(--ink-3);margin-top:3px}
+.kpi .dot{position:absolute;top:15px;right:15px;width:6px;height:6px;border-radius:50%}
+.kpi.due  .v{color:var(--due)}  .kpi.due  .dot{background:var(--due)}
+.kpi.pend .v{color:var(--pend)} .kpi.pend .dot{background:var(--pend)}
+.kpi.held .v{color:var(--held)} .kpi.held .dot{background:var(--held)}
+.kpi.info .v{color:var(--pri)}  .kpi.info .dot{background:var(--pri)}
+/* Zero is information, but it must not compete with money. */
+.kpi.quiet{background:var(--panel-2);box-shadow:none}
+.kpi.quiet .v{color:var(--ink-3);font-weight:500;opacity:.6}
+.kpi.quiet .c{opacity:.7}
+.kpi.quiet .dot{display:none}
+
+/* ── tables ───────────────────────────────────────────────────────────────── */
+.tblwrap{overflow-x:auto}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+thead th{background:var(--thead-bg);color:var(--thead-ink);text-align:left;font-size:9.5px;
+  letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:10px 14px;white-space:nowrap;
+  position:sticky;top:0;z-index:2}
+thead th:first-child{padding-left:18px}
+thead th:last-child{padding-right:18px}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody td:first-child{padding-left:18px}
+tbody td:last-child{padding-right:18px}
+tbody tr:last-child td{border-bottom:0}
+tbody tr{transition:background .1s}
+
+/* ── Frozen first two columns (wide rate-card tables) ──────────────────────
+   Sticky cells need an opaque background or the scrolling columns show
+   through. The z-index ladder: body sticky cell (3) < header (4) < the
+   header's own sticky cells (5), so every overlap resolves correctly. */
+.stickycols .sticky1,.stickycols .sticky2{position:sticky}
+.stickycols tbody .sticky1,.stickycols tbody .sticky2{background:var(--panel);z-index:3}
+.stickycols thead .sticky1,.stickycols thead .sticky2{background:var(--thead-bg);z-index:5}
+.stickycols .sticky1{left:0;width:56px;min-width:56px}
+.stickycols .sticky2{left:56px;min-width:150px}
+/* The seam that tells the eye the frozen block ends here. */
+.stickycols .sticky2::after{content:"";position:absolute;top:0;right:0;bottom:0;width:1px;
+  background:var(--line-2)}
+.stickycols thead .sticky2::after{background:rgba(255,255,255,.28)}
+/* Row hover has to repaint the frozen cells too, or they read as a separate row. */
+.stickycols tbody tr:hover .sticky1,.stickycols tbody tr:hover .sticky2{background:var(--panel-2)}
+tbody tr:hover{background:var(--panel-2)}
+th.r,td.r{text-align:right}
+td.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px}
+td.id{font-family:var(--mono);font-size:12.5px;font-weight:500}
+tr.voided td{opacity:.42;text-decoration:line-through}
+tr.clickable{cursor:pointer}
+.submeta{font-size:11px;color:var(--ink-3);margin-top:2px;font-family:var(--ui)}
+/* Absence is not zero. "0.00" reads as a measurement; this reads as missing. */
+.gap{color:var(--ink-3);font-style:italic;font-size:12px;font-family:var(--ui);opacity:.75}
+
+/* ── badges ───────────────────────────────────────────────────────────────── */
+/* ── Tooltip ──────────────────────────────────────────────────────────────
+   Truncated cells need the full value on hover. The browser's own `title`
+   waits about a second and never wraps, so this replaces it visually while the
+   real `title` stays on the element for touch long-press.
+
+   The bubble is portalled to <body> as position:fixed and placed by JS, because
+   tables sit inside `.tblwrap` — a scroll container, which clips on both axes
+   and would cut off an in-flow bubble on the first and last rows. */
+.tip{cursor:help;outline:none}
+.tip:focus-visible{outline:2px solid var(--pri);outline-offset:2px;border-radius:4px}
+.tip-b{position:fixed;z-index:90;pointer-events:none;
+  background:var(--ink);color:var(--panel);font-size:11.5px;font-weight:500;
+  line-height:1.5;letter-spacing:0;text-transform:none;text-align:left;
+  padding:7px 10px;border-radius:8px;box-shadow:var(--shadow-lg);
+  width:max-content;max-width:288px;white-space:normal;
+  animation:tipin .12s ease}
+@keyframes tipin{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}
+
+.b{display:inline-flex;align-items:center;gap:4.5px;font-size:10.5px;font-weight:650;
+  border-radius:6px;padding:2.5px 7px;white-space:nowrap;line-height:1.35}
+.b.ok{background:var(--due-bg);color:var(--due)}
+.b.warn{background:var(--pend-bg);color:var(--pend)}
+.b.bad{background:var(--held-bg);color:var(--held)}
+.b.mut{background:var(--inert-bg);color:var(--inert)}
+.b.blue{background:var(--pri-soft);color:var(--pri)}
+.b .pip{width:5px;height:5px;border-radius:50%;background:currentColor;flex:0 0 5px}
+
+/* ── controls ─────────────────────────────────────────────────────────────── */
+.btn{border:1px solid var(--line-2);background:var(--panel);border-radius:8px;padding:7px 13px;
+  font-size:12.5px;font-weight:550;cursor:pointer;transition:.12s;white-space:nowrap;color:var(--ink);
+  display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--panel-2);border-color:var(--ink-3)}
+.btn:active{transform:translateY(.5px)}
+.btn.pri{background:var(--pri);border-color:var(--pri);color:var(--pri-ink);font-weight:600}
+.btn.pri:hover{background:var(--pri-hi);border-color:var(--pri-hi)}
+.btn.danger{color:var(--held);border-color:var(--held);background:transparent}
+.btn.danger:hover{background:var(--held-bg)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn.sm{padding:4px 9px;font-size:11.5px;border-radius:7px}
+.btn.gho{border-color:transparent;background:transparent;color:var(--ink-2)}
+.btn.gho:hover{background:var(--rail-hover)}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+
+.seg{display:inline-flex;gap:2px;background:var(--rail-seg);border-radius:9px;padding:3px;border:1px solid var(--line)}
+.seg button{border:0;background:transparent;border-radius:6px;padding:5.5px 11px;font-size:12px;
+  font-weight:550;color:var(--ink-2);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.11s}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--panel);color:var(--pri);font-weight:650;box-shadow:var(--shadow)}
+.segn{font-family:var(--mono);font-size:10px;font-weight:600;background:var(--inert-bg);
+  color:var(--inert);border-radius:4px;padding:0 5px;min-width:17px;text-align:center}
+.seg button.on .segn{background:var(--pri-soft);color:var(--pri)}
+
+label.f{display:block;font-size:9.5px;font-weight:700;color:var(--ink-3);margin-bottom:5px;
+  text-transform:uppercase;letter-spacing:.09em}
+input,select,textarea{width:100%;border:1px solid var(--line-2);border-radius:8px;padding:8px 10px;
+  font:inherit;font-size:13px;background:var(--panel);color:var(--ink);transition:.12s}
+input:hover,select:hover,textarea:hover{border-color:var(--ink-3)}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-soft)}
+input::placeholder{color:var(--ink-3);opacity:.8}
+.search{position:relative;display:flex;align-items:center}
+.search input{padding-left:32px}
+.search .mag{position:absolute;left:10px;color:var(--ink-3);pointer-events:none;display:grid;place-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:13px}
+
+.fchip{display:inline-flex;align-items:center;gap:6px;background:var(--pri-soft);color:var(--pri);
+  border:1px solid var(--pri-line);border-radius:999px;padding:3.5px 10px;font-size:11.5px;font-weight:600}
+.fchip button{border:0;background:transparent;color:inherit;cursor:pointer;font-weight:700;padding:0;line-height:1}
+
+/* ── Filter popover — checkbox facets + optional date range ────────────── */
+.filterwrap{position:relative;display:inline-flex}
+.filterpop{position:absolute;top:calc(100% + 8px);left:0;z-index:40;width:280px;max-height:min(560px,70vh);
+  overflow-y:auto;background:var(--panel);border:1px solid var(--line-2);border-radius:12px;
+  box-shadow:var(--shadow-lg,0 12px 32px rgba(0,0,0,.18));padding:14px;display:flex;flex-direction:column;gap:14px}
+.fg-h{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:7px}
+.fg-list{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:9px;padding:4px}
+.fg-list.scroll{max-height:150px;overflow-y:auto}
+.fg-opt{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--ink)}
+.fg-opt:hover{background:var(--panel-2)}
+.fg-opt input{width:auto;margin:0;flex:0 0 auto}
+.fg-opt span:nth-child(2){flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fg-n{color:var(--ink-3);font-size:11.5px;flex:0 0 auto}
+.fg-empty{padding:6px 4px;color:var(--ink-3);font-size:12px;font-style:italic}
+.fg-dates{display:flex;align-items:center;gap:8px}
+.fg-dates input{flex:1;min-width:0}
+.fg-dates span{color:var(--ink-3);font-size:12px;flex:0 0 auto}
+.fg-actions{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+
+/* ── tiles ────────────────────────────────────────────────────────────────── */
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--panel);
+  cursor:pointer;text-align:left;transition:.12s;box-shadow:var(--shadow);color:var(--ink)}
+.tile:hover{border-color:var(--pri-line);background:var(--panel-2)}
+.tile.on{border-color:var(--pri);background:var(--pri-soft)}
+.tile .t{font-weight:600;font-size:12.5px;letter-spacing:-.005em}
+.tile .c{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:3px}
+
+/* ── overlays ─────────────────────────────────────────────────────────────── */
+.scrim{position:fixed;inset:0;background:rgba(5,10,16,.5);backdrop-filter:blur(2px);
+  display:flex;align-items:center;justify-content:center;z-index:50;padding:22px;animation:fade .13s ease}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 24px;
+  max-width:600px;width:100%;max-height:86vh;overflow:auto;box-shadow:var(--shadow-lg);
+  animation:pop .15s cubic-bezier(.2,.9,.3,1)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:none}}
+.modal h3{margin:0 0 5px;font-size:16px;font-weight:700;letter-spacing:-.015em}
+.modal .why{color:var(--ink-2);font-size:12.5px;margin-bottom:18px;line-height:1.6}
+
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(600px,100%);background:var(--panel);z-index:55;
+  box-shadow:var(--shadow-lg);overflow-y:auto;border-left:1px solid var(--line);
+  animation:slide .2s cubic-bezier(.2,.9,.3,1)}
+@keyframes slide{from{transform:translateX(24px);opacity:.5}to{transform:none;opacity:1}}
+.drawer-h{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--line);
+  padding:18px 22px;display:flex;align-items:flex-start;gap:12px;z-index:2}
+.drawer-b{padding:18px 22px 40px}
+.drawer h3{margin:2px 0 0;font-size:19px;font-weight:650;font-family:var(--mono);letter-spacing:-.02em}
+.dr-facts{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:11px;overflow:hidden;margin:16px 0 22px}
+.dr-facts>div{background:var(--panel);padding:10px 13px}
+.dr-facts .k{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700}
+.dr-facts .v{font-size:13px;font-weight:550;margin-top:3px}
+.sect{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:700;margin:22px 0 9px}
+
+/* ── Project timeline strip (in ProjectDrawer) ──────────────────────────── */
+.timeline-wrap{display:flex;align-items:center;gap:4px}
+.tl-arrow{flex:0 0 auto;border:1px solid var(--line-2);background:var(--panel);color:var(--ink-2);
+  border-radius:8px;width:26px;height:26px;display:grid;place-items:center;cursor:pointer}
+.tl-arrow:hover{background:var(--panel-2)}
+.timeline-strip{flex:1;display:flex;overflow-x:auto;scrollbar-width:thin;padding:6px 2px}
+.tl-stage{position:relative;display:flex;flex-direction:column;align-items:center;flex:0 0 auto;width:112px}
+.tl-name{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);
+  font-weight:700;margin-bottom:8px;text-align:center;white-space:nowrap}
+.tl-chip{background:var(--panel-2);border:1px solid var(--line-2);color:var(--ink-3);
+  border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:600;white-space:nowrap;z-index:1}
+.tl-chip.done{background:var(--pri-soft);border-color:var(--pri-line);color:var(--pri)}
+.tl-line{position:absolute;top:calc(50% + 4px);left:50%;width:100%;height:1px;background:var(--line-2);z-index:0}
+
+.calc-tbl{width:100%;font-size:13px;border-collapse:collapse}
+.calc-tbl td{padding:9px 0;border-bottom:1px solid var(--line)}
+.calc-tbl td.r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;
+  white-space:nowrap;font-size:12.5px}
+.calc-tbl .neg td.r{color:var(--held)}
+.calc-tbl .tot td{font-weight:700;border-top:1.5px solid var(--line-2)}
+.calc-tbl .payout td{font-weight:700;color:var(--due);border-bottom:0}
+.calc-tbl .payout td.r{font-size:15px}
+.calc-tbl .ind td{padding:5px 0 5px 15px;color:var(--ink-3);font-size:11.5px;border-bottom:0}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);
+  color:var(--panel);padding:11px 19px;border-radius:10px;font-weight:550;font-size:12.5px;z-index:70;
+  box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:9px;animation:up .18s cubic-bezier(.2,.9,.3,1)}
+@keyframes up{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%)}}
+.toast.bad{background:var(--held);color:#fff}
+.toast .pip{width:6px;height:6px;border-radius:50%;background:var(--due)}
+.toast.bad .pip{background:#fff}
+
+.pre{background:var(--code-bg);border:1px solid var(--line);border-radius:10px;padding:15px 17px;
+  overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.75;margin:0;color:var(--ink-2)}
+
+/* ── Ask AI — floating assistant ─────────────────────────────────────────── */
+.askfab{position:fixed;bottom:22px;right:22px;z-index:60;display:flex;align-items:center;gap:8px;
+  background:var(--pri);color:#fff;border:0;border-radius:999px;padding:12px 18px 12px 15px;
+  font-weight:650;font-size:13.5px;cursor:pointer;box-shadow:var(--shadow-lg);transition:.12s}
+.askfab:hover{background:var(--pri-hi);transform:translateY(-1px)}
+
+.askpanel{position:fixed;bottom:78px;right:22px;z-index:60;width:min(360px,calc(100vw - 32px));
+  height:min(480px,calc(100vh - 120px));background:var(--panel);border:1px solid var(--line-2);
+  border-radius:14px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;
+  animation:up .16s cubic-bezier(.2,.9,.3,1)}
+.askpanel-h{display:flex;align-items:center;gap:8px;padding:13px 14px;border-bottom:1px solid var(--line);
+  font-weight:700;font-size:13px;color:var(--ink);background:var(--panel-2)}
+.askpanel-h .itool{margin-left:auto;padding:4px;border:0}
+.askpanel-body{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.askmsg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:13px;line-height:1.5}
+.askmsg.ai{background:var(--panel-2);border:1px solid var(--line);color:var(--ink-2);align-self:flex-start;border-bottom-left-radius:3px}
+.askmsg.user{background:var(--pri);color:#fff;align-self:flex-end;border-bottom-right-radius:3px}
+.askpanel-input{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.askpanel-input input{flex:1;margin:0}
+.askpanel-input .itool{border-radius:8px;padding:8px}
+.askpanel-input .itool.pri{background:var(--pri);color:#fff;border-color:var(--pri)}
+.askpanel-input .itool.pri:hover{background:var(--pri-hi)}
+.askpanel-input .itool:disabled{opacity:.5;cursor:not-allowed}
+@media (max-width:520px){.askpanel{right:16px;left:16px;width:auto}}
+
+/* ── Hamburger + off-canvas scrim (desktop: neither exists) ───────────────── */
+.burger{display:none;border:1px solid var(--line);background:var(--panel);color:var(--ink-2);
+  border-radius:9px;padding:7px 8px;cursor:pointer;line-height:0;flex:0 0 auto}
+.burger:hover{color:var(--ink);background:var(--panel-2)}
+.navscrim{display:none;position:fixed;inset:0;background:rgba(5,10,16,.5);
+  backdrop-filter:blur(2px);z-index:58;animation:fade .13s ease}
+
+/* ── Tablet & phone: the rail goes off-canvas behind a hamburger ──────────── */
+@media (max-width:860px){
+  /* One column — the sidebar leaves the grid entirely. */
+  .app{grid-template-columns:minmax(0,1fr)}
+  .pagebody,.pagehead{padding-left:16px;padding-right:16px}
+
+  .burger{display:grid;place-items:center}
+  .navscrim{display:block}
+
+  /* The rail becomes a full-label overlay drawer. It slides rather than pops
+     so the scrim and panel read as one gesture. */
+  .side{position:fixed;left:0;top:0;bottom:0;z-index:60;width:min(280px,84vw);
+    transform:translateX(-100%);transition:transform .2s cubic-bezier(.2,.9,.3,1);
+    box-shadow:var(--shadow-lg)}
+  .app.navopen .side{transform:none}
+
+  /* The overlay always shows the FULL rail — a desktop .mini preference must
+     not leak icon-mode styling into it. */
+  .app.mini .brandrow{flex-direction:row;padding:16px 12px 12px 16px;gap:8px}
+  .app.mini .brand .logo-full{display:block}
+  .app.mini .brand .logo-mark{display:none}
+  .app.mini .appname{display:block}
+  .app.mini .eco{display:flex}
+  .app.mini .grp-h{opacity:1;height:auto;padding:15px 8px 6px}
+  .app.mini .navscroll{padding:4px 10px 18px}
+  .app.mini .navitem{justify-content:flex-start;gap:10px;padding:8px 10px}
+  .app.mini .navlabel{display:block}
+  .app.mini .navitem .cnt{position:static;padding:1.5px 7px;min-width:9px;height:auto;
+    border-radius:999px;font-size:10.5px;background:var(--pend);box-shadow:0 0 0 1px var(--rail-bg)}
+  .app.mini .navitem.on .cnt{background:var(--pri)}
+  .app.mini .railfoot{padding:11px 14px;justify-content:flex-start;gap:9px}
+  .app.mini .railfoot .em{display:block}
+
+  /* Collapse-to-icons is a desktop concept — hide its toggle in the overlay. */
+  .railtools .itool:first-child{display:none}
+
+  /* The rail is now hidden by default, so the dealer/rep switch also lives in
+     the page header where it is always reachable. */
+  .headrow .eco-inline{display:inline-flex}
+}
+
+/* ── Phone ────────────────────────────────────────────────────────────────── */
+@media (max-width:560px){
+  .pagebody{padding:14px 12px 56px}
+  .pagehead{padding:12px 12px 11px}
+  .pagehead h1{font-size:17px}
+  .headrow{gap:8px}
+  .count{font-size:10.5px;padding:3px 9px}
+  .sub{font-size:12px}
+
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .card-h{padding:11px 12px;gap:8px}
+  .card-b{padding:12px}
+  .pager{padding:10px 12px}
+  thead th:first-child{padding-left:12px}
+  tbody td:first-child{padding-left:12px}
+
+  /* Fixed-width inline search boxes become fluid — !important because the
+     widths are set as inline styles per page. */
+  .card-h .search{flex:1 1 150px;width:auto!important;min-width:0}
+  .card-h select{flex:1 1 120px;width:auto!important;min-width:0}
+
+  /* Anchored to a button that may sit at the viewport's edge, the popover
+     would open half off-screen — on a phone it becomes a fixed sheet. */
+  .filterwrap{position:static}
+  .filterpop{position:fixed;left:12px;right:12px;top:auto;bottom:12px;width:auto;
+    max-height:min(70vh,540px)}
+
+  /* 206px of frozen columns on a 360px screen leaves no room for the data —
+     only the id column stays put on phones. */
+  .stickycols .sticky2{position:static;min-width:0}
+  .stickycols .sticky2::after{display:none}
+
+  .modal{padding:16px;border-radius:14px;max-height:92vh}
+  .scrim{padding:10px}
+  .drawer-h{padding:14px}
+  .drawer-b{padding:14px 14px 32px}
+  .dr-facts{grid-template-columns:1fr 1fr}
+
+  .toast{left:12px;right:12px;transform:none;max-width:none;justify-content:center}
+
+  .seg{max-width:100%;overflow-x:auto;scrollbar-width:none}
+  .seg::-webkit-scrollbar{display:none}
+  .seg button{white-space:nowrap}
+}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
