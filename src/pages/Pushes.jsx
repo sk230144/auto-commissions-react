@@ -225,7 +225,21 @@ function CreateDialog({ form, setForm, kinds, rail, onSave, busy }) {
   return (
     <Modal title="New manual payment"
       why="Posts to the ledger only after two distinct admins sign off."
-      onClose={() => setForm(null)}>
+      onClose={() => setForm(null)}
+      footer={<>
+        {/* The reason Raise is disabled belongs beside Raise, not scrolled
+            away from it. */}
+        {problems.length > 0 && (
+          <span className="submeta" style={{ color: "var(--held)", marginRight: "auto" }}>{problems[0]}.</span>
+        )}
+        <button className="btn" onClick={() => setForm(null)}>Cancel</button>
+        <button className="btn pri" disabled={problems.length > 0 || busy}
+          onClick={() => onSave({
+            our: form.our.trim(), party: form.party.trim(), kind: form.kind,
+            amount_cents: cents, reason: form.reason.trim(), rail,
+            ...(dealerFunded ? { funded_by: form.funded_by.trim() } : {}),
+          })}>Raise</button>
+      </>}>
       <div className="grid">
         <div><label className="f">OUR#</label><input value={form.our} onChange={set("our")} /></div>
         <div><label className="f">Payee</label><input value={form.party} onChange={set("party")} /></div>
@@ -255,18 +269,6 @@ function CreateDialog({ form, setForm, kinds, rail, onSave, busy }) {
           This posts <b>two legs</b>: the rep is paid and the funding dealer is deducted the same
           amount. It is forced onto the rep rail regardless of the current toggle.
         </div>
-      )}
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={() => setForm(null)}>Cancel</button>
-        <button className="btn pri" disabled={problems.length > 0 || busy}
-          onClick={() => onSave({
-            our: form.our.trim(), party: form.party.trim(), kind: form.kind,
-            amount_cents: cents, reason: form.reason.trim(), rail,
-            ...(dealerFunded ? { funded_by: form.funded_by.trim() } : {}),
-          })}>Raise</button>
-      </div>
-      {problems.length > 0 && (
-        <div className="submeta" style={{ color: "var(--held)", marginTop: 8 }}>{problems[0]}.</div>
       )}
     </Modal>
   );

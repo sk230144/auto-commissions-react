@@ -341,8 +341,22 @@ function SettleDialog({ lines, onOk, onCancel, busy }) {
   return (
     <Modal wide title={lines.length === 1 ? "Record a payment" : `Record ${lines.length} payments`}
       why="Payments are append-only — there is no edit or delete, so a correction is a new offsetting entry."
-      onClose={onCancel}>
-      <div className="tblwrap" style={{ maxHeight: 260, marginBottom: 14 }}>
+      onClose={onCancel}
+      footer={<>
+        {/* The running total stays visible while the amounts scroll — it is
+            the figure being committed. */}
+        <span style={{ fontSize: 13, color: "var(--ink-2)", marginRight: "auto" }}>
+          Total <b>{moneyC(totalC)}</b>
+          {bad && <span className="submeta" style={{ color: "var(--held)", display: "block" }}>
+            Each amount must be non-zero and no more than the line's balance.
+          </span>}
+        </span>
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className="btn pri" disabled={bad || busy || !meta.date} onClick={submit}>Record payment</button>
+      </>}>
+      {/* No inner maxHeight — the modal body is the scroll area now, and a
+          nested one would trap the wheel. */}
+      <div className="tblwrap" style={{ marginBottom: 14 }}>
         <table>
           <thead><tr><th>OUR#</th><th>Payee</th><th className="r">Balance</th><th className="r" style={{ width: 130 }}>Pay now</th></tr></thead>
           <tbody>
@@ -375,16 +389,6 @@ function SettleDialog({ lines, onOk, onCancel, busy }) {
         <label className="f">Notes</label>
         <input value={meta.notes} onChange={(e) => setMeta({ ...meta, notes: e.target.value })} />
       </div>
-      <div className="row" style={{ justifyContent: "space-between", marginTop: 16 }}>
-        <span style={{ fontSize: 13, color: "var(--ink-2)" }}>Total <b>{moneyC(totalC)}</b></span>
-        <div className="row">
-          <button className="btn" onClick={onCancel}>Cancel</button>
-          <button className="btn pri" disabled={bad || busy || !meta.date} onClick={submit}>Record payment</button>
-        </div>
-      </div>
-      {bad && <div className="submeta" style={{ color: "var(--held)", marginTop: 8 }}>
-        Each amount must be non-zero and no more than the line's balance.
-      </div>}
     </Modal>
   );
 }

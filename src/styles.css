@@ -454,6 +454,18 @@ input::placeholder{color:var(--ink-3);opacity:.8}
 .modal h3{margin:0 0 5px;font-size:16px;font-weight:700;letter-spacing:-.015em}
 .modal .why{color:var(--ink-2);font-size:12.5px;margin-bottom:18px;line-height:1.6}
 
+/* Split modal: title and actions pinned, only the fields scroll. The padding
+   moves off the shell and onto the three regions, so the scrolling body can
+   run edge to edge under its own rules. */
+.modal-split{display:flex;flex-direction:column;padding:0;overflow:hidden}
+.modal-split .modal-h{padding:20px 24px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.modal-split .modal-h .why{margin-bottom:0}
+/* min-height:0 lets a flex child actually shrink and scroll. */
+.modal-split .modal-b{flex:1 1 auto;overflow-y:auto;min-height:0;padding:18px 24px}
+.modal-split .modal-f{flex:0 0 auto;padding:14px 24px;border-top:1px solid var(--line);
+  background:var(--panel-2);display:flex;justify-content:flex-end;gap:8px;align-items:center;
+  flex-wrap:wrap;border-radius:0 0 16px 16px}
+
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(600px,100%);background:var(--panel);z-index:55;
   box-shadow:var(--shadow-lg);overflow-y:auto;border-left:1px solid var(--line);
   animation:slide .2s cubic-bezier(.2,.9,.3,1)}

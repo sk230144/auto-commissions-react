@@ -232,7 +232,16 @@ function CreateDialog({ form, setForm, onSave, busy }) {
   return (
     <Modal title="New advance"
       why="No money moves yet — the advance stays pending until two different people sign it off."
-      onClose={() => setForm(null)}>
+      onClose={() => setForm(null)}
+      footer={<>
+        <button className="btn" onClick={() => setForm(null)}>Cancel</button>
+        <button className="btn pri" disabled={!ok || busy}
+          onClick={() => onSave({
+            code: form.code, party: form.party.trim(), party_type: form.party_type,
+            principal_cents: cents, payback_type: form.payback_type,
+            payback_rate: rate, notes: form.notes,
+          })}>Create</button>
+      </>}>
       <div className="grid">
         <div><label className="f">Code</label>
           <input value={form.code} placeholder="ADV-2026-014" onChange={set("code")} /></div>
@@ -257,15 +266,6 @@ function CreateDialog({ form, setForm, onSave, busy }) {
       <div style={{ marginTop: 10 }}>
         <label className="f">Notes</label>
         <textarea rows={2} value={form.notes} onChange={set("notes")} />
-      </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={() => setForm(null)}>Cancel</button>
-        <button className="btn pri" disabled={!ok || busy}
-          onClick={() => onSave({
-            code: form.code, party: form.party.trim(), party_type: form.party_type,
-            principal_cents: cents, payback_type: form.payback_type,
-            payback_rate: rate, notes: form.notes,
-          })}>Create</button>
       </div>
     </Modal>
   );

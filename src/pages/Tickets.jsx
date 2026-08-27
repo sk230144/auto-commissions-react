@@ -182,7 +182,19 @@ function TicketDialog({ form, setForm, onSave, busy }) {
     <Modal title={form.id ? `Ticket #${form.id}` : "Raise a ticket"}
       why={form.id ? "Every field stays editable — the journal keeps what changed."
         : "Say what you saw. Somebody will pick it up."}
-      onClose={() => setForm(null)}>
+      onClose={() => setForm(null)}
+      footer={<>
+        <button className="btn" onClick={() => setForm(null)}>Cancel</button>
+        <button className="btn pri" disabled={!form.title?.trim() || busy}
+          onClick={() => onSave({
+            ...(form.id ? { id: form.id } : {}),
+            title: form.title.trim(), detail: form.detail || "", raised_by: form.raised_by || "",
+            area: form.area || "", status: form.status || "open", waiting_on: form.waiting_on || "",
+            solution: form.solution || "", blocked_on: form.blocked_on || "",
+          })}>
+          {form.id ? "Save" : "Raise"}
+        </button>
+      </>}>
       <div style={{ marginBottom: 10 }}>
         <label className="f">Title *</label>
         <input value={form.title} placeholder="What was asked for" onChange={set("title")} />
@@ -216,18 +228,6 @@ function TicketDialog({ form, setForm, onSave, busy }) {
         <label className="f">Waiting on</label>
         <textarea rows={2} value={form.blocked_on || ""}
           placeholder="Only when blocked — what it needs and from whom" onChange={set("blocked_on")} />
-      </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={() => setForm(null)}>Cancel</button>
-        <button className="btn pri" disabled={!form.title?.trim() || busy}
-          onClick={() => onSave({
-            ...(form.id ? { id: form.id } : {}),
-            title: form.title.trim(), detail: form.detail || "", raised_by: form.raised_by || "",
-            area: form.area || "", status: form.status || "open", waiting_on: form.waiting_on || "",
-            solution: form.solution || "", blocked_on: form.blocked_on || "",
-          })}>
-          {form.id ? "Save" : "Raise"}
-        </button>
       </div>
     </Modal>
   );

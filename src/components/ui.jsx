@@ -160,7 +160,15 @@ export function Pager({ total, limit, offset, onOffset, busy }) {
   );
 }
 
-export function Modal({ title, why, onClose, children, wide }) {
+/**
+ * A dialog. Pass `footer` (the action buttons) and the title and buttons stay
+ * pinned while only the fields scroll — on a long form the Save button would
+ * otherwise sit below the fold, which is where people lose it.
+ *
+ * Without `footer` the whole body scrolls as one block, so callers that put
+ * their buttons inside `children` keep working unchanged.
+ */
+export function Modal({ title, why, onClose, children, footer, wide }) {
   useEffect(() => {
     const k = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k);
@@ -168,10 +176,14 @@ export function Modal({ title, why, onClose, children, wide }) {
   }, [onClose]);
   return (
     <div className="scrim" onClick={onClose}>
-      <div className="modal" style={wide ? { maxWidth: 860 } : undefined} onClick={(e) => e.stopPropagation()}>
-        <h3>{title}</h3>
-        {why && <div className="why">{why}</div>}
-        {children}
+      <div className={"modal" + (footer ? " modal-split" : "")}
+        style={wide ? { maxWidth: 860 } : undefined} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-h">
+          <h3>{title}</h3>
+          {why && <div className="why">{why}</div>}
+        </div>
+        <div className="modal-b">{children}</div>
+        {footer && <div className="modal-f">{footer}</div>}
       </div>
     </div>
   );
