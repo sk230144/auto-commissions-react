@@ -6,7 +6,7 @@ import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Tip } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
-import FilterPanel from "../components/FilterPanel.jsx";
+import FilterPanel, { apiFacet } from "../components/FilterPanel.jsx";
 
 const LIMIT = 100;
 
@@ -82,6 +82,24 @@ export default function Settings({ group }) {
   const tabsQ = useApi((signal) => api.ratesSummaryFor(rail)({ signal }), [rail]);
   const tabs = tabsQ.data?.tabs || [];
 
+  /**
+   * Dealer and state options come from /payments/summary, which returns full
+   * facets over the ledger.
+   *
+   * These are NOT the same population as the rate tables: the facets list
+   * parties that have ledger lines, while a rate card exists for anyone who
+   * has been priced, payments or not. In a 1,000-row sample of pay_schedule,
+   * 35 of 40 dealers were absent from these facets. So the list is labelled
+   * for what it is and every group keeps a free-text box, which the server
+   * matches with `contains` across the whole table.
+   */
+  const facetsQ = useApi(
+    (signal) => api.paymentSummary(
+      { party_type: rail, show_zeros: true, show_all_dates: true }, { signal }),
+    [rail]
+  );
+  const apiFacets = facetsQ.data?.facets;
+
   const rowsQ = useApi(
     (signal) => api.ratesFor(rail)({
       table, all: showAll, search, filters,
@@ -102,43 +120,74 @@ export default function Settings({ group }) {
   const reset = (fn) => (v) => { fn(v); setOffset(0); };
   const pick = (t) => { setTable(t); setFilters([]); setSort(null); setQ(""); setOffset(0); };
 
-  // Filter facets can't come from the server here (no facet endpoint on this
-  // surface), so the panel offers the values present on the loaded page. Ops
-  // are chosen per column kind.
   /**
-   * These endpoints return no facets and there is no distinct-values call, so
-   * the tick list can only be built from the rows currently loaded. On
-   * pay_schedule that is 100 rows out of ~32,000 — a handful of the dealers
-   * that exist.
+   * Filter options. Dealer and state come from the ledger facets above; the
+   * rate endpoints publish none of their own, so any other text column can
+   * only offer the values on the loaded page — 100 rows of ~32,000 on
+   * pay_schedule.
    *
-   * Rather than let a partial list pass for the whole set, each group says how
-   * far it actually sees and carries a free-text box, which the server matches
-   * with `contains` across the entire table. Complete tick lists need a facet
-   * endpoint on this surface.
+   * Either way the group says how far its ticks actually see, and carries a
+   * free-text box the server matches with `contains` across the whole table,
+   * so no list is ever mistaken for the complete set.
    */
   const filterGroups = useMemo(() => {
     const partial = total > rows.length;
+    // Which rate-table column each ledger facet can populate. The facets key
+    // is always `dealers`, but on the rep rail it holds rep names — so it maps
+    // to rep_name there and dealer here.
+    const FROM_FACETS = {
+      state: apiFacets?.states,
+      ...(rail === "rep"
+        ? { rep_name: apiFacets?.dealers }
+        : { dealer: apiFacets?.dealers, sub_dealer: apiFacets?.dealers }),
+    };
+
     return cols
       .filter((c) => c.name !== "id" && c.kind === "text")
       .slice(0, 4)
-      .map((c) => ({
-        key: c.name, label: c.label || c.name, field: c.name,
-        contains: true,
-        note: partial
-          ? `Ticks cover the ${rows.length} rows on this page. Use the box above to match across all ${total.toLocaleString()}.`
-          : undefined,
-        options: [...new Set(rows.map((r) => r[c.name]).filter((v) => v !== null && v !== ""))]
-          .sort().slice(0, 200)
-          .map((value) => ({ value, count: rows.filter((r) => r[c.name] === value).length })),
-      }));
-  }, [cols, rows, total]);
+      .map((c) => {
+        const facet = FROM_FACETS[c.name];
+        if (facet) {
+          // rep_name in the rate table often carries the dealer in brackets
+          // ("Ryan Chelberg (World Energy Direct)") while the ledger holds the
+          // bare name, so an exact match there finds nothing and would read as
+          // "no rate card". Those ticks search instead of matching exactly.
+          const loose = c.name === "rep_name";
+          return {
+            key: c.name, label: c.label || c.name, field: c.name, contains: true,
+            loose,
+            // Named for what it actually is, so a name missing from the list is
+            // never read as someone without a rate card.
+            note: `Names with payment activity. A ${rail === "rep" ? "rep" : "dealer"} priced but not yet paid will not be listed — use the box above.`
+              + (loose ? " Names here are matched loosely, one at a time." : ""),
+            options: apiFacet(facet, { sort: c.name === "state" ? "value" : "count" }),
+          };
+        }
+        return {
+          key: c.name, label: c.label || c.name, field: c.name, contains: true,
+          note: partial
+            ? `Ticks cover the ${rows.length} rows on this page. Use the box above to match across all ${total.toLocaleString()}.`
+            : undefined,
+          options: [...new Set(rows.map((r) => r[c.name]).filter((v) => v !== null && v !== ""))]
+            .sort().slice(0, 200)
+            .map((value) => ({ value, count: rows.filter((r) => r[c.name] === value).length })),
+        };
+      });
+  }, [cols, rows, total, apiFacets, rail]);
 
   // The panel speaks {key: [values]} plus {key~: text}; the API speaks filters[].
   const panelValue = useMemo(() => {
     const v = {};
     for (const g of filterGroups) {
-      v[g.key] = filters.find((f) => f.column === g.key && f.op === "in")?.values || [];
-      v[`${g.key}~`] = filters.find((f) => f.column === g.key && f.op === "contains")?.value || "";
+      // A loose group stores its tick as a `contains`, so it has to be read
+      // back from there or the box would not stay checked. The free-text entry
+      // is whichever `contains` is not one of the offered options.
+      const contains = filters.filter((f) => f.column === g.key && f.op === "contains").map((f) => f.value);
+      const optionValues = new Set(g.options.map((o) => o.value));
+      v[g.key] = g.loose
+        ? contains.filter((x) => optionValues.has(x))
+        : filters.find((f) => f.column === g.key && f.op === "in")?.values || [];
+      v[`${g.key}~`] = contains.find((x) => !optionValues.has(x)) || "";
     }
     return v;
   }, [filters, filterGroups]);
@@ -146,7 +195,15 @@ export default function Settings({ group }) {
   const applyPanel = (val) => {
     const next = [];
     for (const g of filterGroups) {
-      if (val[g.key]?.length) next.push({ column: g.key, op: "in", values: val[g.key] });
+      const picked = val[g.key] || [];
+      if (picked.length) {
+        // Filters AND together and `contains` takes a single value, so a loose
+        // group can only honour one tick. Extra ticks would silently return
+        // nothing, so the first is applied and the rest are dropped — the panel
+        // says so rather than showing an empty table.
+        if (g.loose) next.push({ column: g.key, op: "contains", value: picked[0] });
+        else next.push({ column: g.key, op: "in", values: picked });
+      }
       const text = (val[`${g.key}~`] || "").trim();
       if (text) next.push({ column: g.key, op: "contains", value: text });
     }
