@@ -6,6 +6,7 @@ import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Modal, Confirm } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import ProjectDrawer from "../components/ProjectDrawer.jsx";
 
 const LIMIT = 50;
 const STATUS_LOOK = {
@@ -28,6 +29,7 @@ export default function Pushes() {
   const [form, setForm] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(null);
 
   const search = useDebounced(q, 350);
 
@@ -109,7 +111,9 @@ export default function Pushes() {
                           {trunc(p.party, 22)}
                           {p.funded_by && <div className="submeta">funded by {trunc(p.funded_by, 20)}</div>}
                         </td>
-                        <td className="id">{p.our || <span className="gap">—</span>}</td>
+                        <td className="id">{p.our
+                          ? <a href="#" onClick={(e) => { e.preventDefault(); setOpen(p.our); }}>{p.our}</a>
+                          : <span className="gap">—</span>}</td>
                         <td>{p.kind_label || p.kind}</td>
                         <td className="r num" style={{ color: p.amount_cents < 0 ? "var(--held)" : undefined }}>
                           {moneyC(p.amount_cents)}
@@ -174,7 +178,9 @@ export default function Pushes() {
                             {trunc(p.party, 22)}
                             {p.funded_by && <div className="submeta">funded by {trunc(p.funded_by, 20)}</div>}
                           </td>
-                          <td className="id">{p.our || <span className="gap">—</span>}</td>
+                          <td className="id">{p.our
+                          ? <a href="#" onClick={(e) => { e.preventDefault(); setOpen(p.our); }}>{p.our}</a>
+                          : <span className="gap">—</span>}</td>
                           <td>{p.kind_label || p.kind}</td>
                           <td className="r num" style={{ color: p.amount_cents < 0 ? "var(--held)" : undefined }}>
                             {moneyC(p.amount_cents)}
@@ -205,6 +211,7 @@ export default function Pushes() {
           "Raised — awaiting two sign-offs").then(() => setForm(null))} />}
 
       {confirm && <Confirm {...confirm} onNo={() => setConfirm(null)} />}
+      {open && <ProjectDrawer our={open} onClose={() => setOpen(null)} />}
     </>
   );
 }

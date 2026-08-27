@@ -6,6 +6,7 @@ import { useApi } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Modal, ErrorState } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import ProjectDrawer from "../components/ProjectDrawer.jsx";
 
 const SEVERITY = { high: "bad", medium: "warn", low: "mut" };
 
@@ -23,6 +24,7 @@ export default function Review() {
   const { say, me } = useStore();
   const [resolveFor, setResolveFor] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(null);
 
   const q = useApi((signal) => api.openItems({ signal }), []);
   const d = q.data;
@@ -84,7 +86,7 @@ export default function Review() {
             </div>
             {g.items.map((i) => (
               <ItemCard key={i.id} item={i} canAct={canAct} busy={busy}
-                onResolve={() => setResolveFor(i)} />
+                onResolve={() => setResolveFor(i)} onOpen={setOpen} />
             ))}
           </div>
         ))}
@@ -100,6 +102,8 @@ export default function Review() {
             act(() => api.resolveOpenItem(it.id, { resolution, actor: me }), "Ruling recorded");
           }} />
       )}
+
+      {open && <ProjectDrawer our={open} onClose={() => setOpen(null)} />}
     </>
   );
 }
@@ -109,7 +113,7 @@ export default function Review() {
  * then the choices, then the evidence — so a reader reaches the decision with
  * the reasoning already behind them.
  */
-function ItemCard({ item, canAct, busy, onResolve }) {
+function ItemCard({ item, canAct, busy, onResolve, onOpen }) {
   const [showVerified, setShowVerified] = useState(false);
   const det = item.detail || {};
   const sev = det.severity;
@@ -172,8 +176,8 @@ function ItemCard({ item, canAct, busy, onResolve }) {
           </div>
         )}
 
-        {Array.isArray(det.jobs) && det.jobs.length > 0 && <JobsTable jobs={det.jobs} />}
-        {Array.isArray(det.payments) && det.payments.length > 0 && <PaymentsTable payments={det.payments} />}
+        {Array.isArray(det.jobs) && det.jobs.length > 0 && <JobsTable jobs={det.jobs} onOpen={onOpen} />}
+        {Array.isArray(det.payments) && det.payments.length > 0 && <PaymentsTable payments={det.payments} onOpen={onOpen} />}
 
         <div className="oi-foot">
           {det.verified && (
@@ -194,7 +198,7 @@ function ItemCard({ item, canAct, busy, onResolve }) {
   );
 }
 
-function JobsTable({ jobs }) {
+function JobsTable({ jobs, onOpen }) {
   const cols = [...new Set(jobs.flatMap((j) => Object.keys(j)))];
   return (
     <>
@@ -207,7 +211,10 @@ function JobsTable({ jobs }) {
               <tr key={j.our || i}>
                 {cols.map((c) => (
                   <td key={c} className={c === "our" ? "id" : undefined}>
-                    {j[c] == null || j[c] === "" ? <span className="gap">—</span> : String(j[c])}
+                    {j[c] == null || j[c] === "" ? <span className="gap">—</span>
+                      : c === "our"
+                        ? <a href="#" onClick={(e) => { e.preventDefault(); onOpen(j.our); }}>{j.our}</a>
+                        : String(j[c])}
                   </td>
                 ))}
               </tr>
@@ -221,7 +228,7 @@ function JobsTable({ jobs }) {
 
 /** These `amount` values are DOLLARS, not cents — the field has no _cents
  *  suffix, and the suffix is the unit contract. */
-function PaymentsTable({ payments }) {
+function PaymentsTable({ payments, onOpen }) {
   return (
     <>
       <div className="sect">Payments already out ({payments.length})</div>
@@ -234,7 +241,7 @@ function PaymentsTable({ payments }) {
           <tbody>
             {payments.map((p, i) => (
               <tr key={`${p.our}-${i}`}>
-                <td className="id">{p.our}</td>
+                <td className="id"><a href="#" onClick={(e) => { e.preventDefault(); onOpen(p.our); }}>{p.our}</a></td>
                 <td>{p.date || <span className="gap">—</span>}</td>
                 <td>{p.kind}</td>
                 <td className="r num">{money(p.amount)}</td>

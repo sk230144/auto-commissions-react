@@ -6,6 +6,7 @@ import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Async, TableSkeleton, Pager } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import ProjectDrawer from "../components/ProjectDrawer.jsx";
 
 const LIMIT = 25;
 
@@ -19,6 +20,7 @@ export default function Exposure() {
   const [q, setQ] = useState("");
   const [offset, setOffset] = useState(0);
   const [incOffset, setIncOffset] = useState(0);
+  const [open, setOpen] = useState(null);
 
   const search = useDebounced(q, 350);
 
@@ -157,7 +159,11 @@ export default function Exposure() {
                   <tbody>
                     {inc.map((r) => (
                       <tr key={r.our_reference + r.party}>
-                        <td className="id">{r.our_reference}</td>
+                        <td className="id">
+                          <a href="#" onClick={(e) => { e.preventDefault(); setOpen(r.our_reference); }}>
+                            {r.our_reference}
+                          </a>
+                        </td>
                         <td>{r.party}</td>
                         <td className="r num">{moneyC(r.advance_paid_cents)}</td>
                       </tr>
@@ -170,6 +176,8 @@ export default function Exposure() {
           </div>
         </div>
       </div>
+
+      {open && <ProjectDrawer our={open} onClose={() => setOpen(null)} />}
     </>
   );
 }
