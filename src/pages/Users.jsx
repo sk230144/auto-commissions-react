@@ -6,7 +6,7 @@ import { useAuth, ROLES, ROLE_LABEL, ROLE_BLURB, ROLE_PAGES, PAGE_LABEL, PAGE_KE
 import { Badge, Empty, Modal, Confirm, Tip } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 
-const ROLE_TONE = { super_admin: "ok", admin: "blue", ops: "mut", approver: "warn", auditor: "mut", dealer: "mut", rep: "mut" };
+const ROLE_TONE = { super_admin: "ok", admin: "blue", ops: "mut", approver: "warn", auditor: "mut" };
 
 /**
  * User Management — who exists, what role they hold, and whether they can sign
@@ -255,15 +255,11 @@ function UserDialog({ form, setForm, onSave, grants }) {
       </div>
 
       <div className="sect">Role</div>
-      <div className="rolepick">
-        {ROLES.map((r) => (
-          <button key={r} type="button" className={"rolecard" + (form.role === r ? " on" : "")}
-            onClick={() => setForm({ ...form, role: r })}>
-            <div className="t">{ROLE_LABEL[r]}</div>
-            <div className="c">{ROLE_BLURB[r]}</div>
-          </button>
-        ))}
-      </div>
+      <select value={form.role} onChange={set("role")} style={{ maxWidth: 300 }}>
+        {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+      </select>
+      {/* What the selected role means, since a dropdown shows only its name. */}
+      <div className="submeta" style={{ marginTop: 6 }}>{ROLE_BLURB[form.role]}</div>
 
       {/* The consequence of the role choice, shown before it is committed. */}
       <div className="sect">This role can reach {form.role === "super_admin" ? "every page" : `${pages.length} pages`}</div>

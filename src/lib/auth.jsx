@@ -40,10 +40,10 @@ export const PAGES = [
 export const PAGE_KEYS = PAGES.map((p) => p.key);
 export const PAGE_LABEL = Object.fromEntries(PAGES.map((p) => [p.key, p.label]));
 
-export const ROLES = ["super_admin", "admin", "ops", "approver", "auditor", "dealer", "rep"];
+export const ROLES = ["super_admin", "admin", "ops", "approver", "auditor"];
 export const ROLE_LABEL = {
   super_admin: "Super admin", admin: "Admin", ops: "Operations",
-  approver: "Approver", auditor: "Auditor", dealer: "Dealer", rep: "Sales rep",
+  approver: "Approver", auditor: "Auditor",
 };
 export const ROLE_BLURB = {
   super_admin: "Everything, including access control. Cannot be locked out.",
@@ -51,8 +51,6 @@ export const ROLE_BLURB = {
   ops: "Day-to-day payment work. No rate cards.",
   approver: "Approves advances and manual payments only.",
   auditor: "Read-only across the money and the rate cards.",
-  dealer: "Their own pipeline, statements and advances.",
-  rep: "Their own pipeline, statements and advances.",
 };
 
 /**
@@ -65,8 +63,6 @@ export const ROLE_PAGES = {
   ops: ["pipeline", "pending", "ready", "stmt", "exposure", "paid", "hold", "advances", "logic", "push", "review", "tickets"],
   approver: ["advances", "push", "tickets"],
   auditor: ["pipeline", "pending", "ready", "stmt", "exposure", "paid", "hold", "dealer", "rep", "logic", "tickets"],
-  dealer: ["pipeline", "stmt", "advances", "tickets"],
-  rep: ["pipeline", "stmt", "advances", "tickets"],
 };
 
 /** The seed account, until the backend exists. */
@@ -83,10 +79,22 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [users, setUsers] = useState(() => read(USERS_KEY, SEED_USERS));
+  // A browser that used an earlier build still holds users and grants for
+  // roles that no longer exist. Reconcile on load rather than leaving someone
+  // signed in with a role nothing grants — which reads as "no pages" and looks
+  // like the app is broken.
+  const [users, setUsers] = useState(() =>
+    read(USERS_KEY, SEED_USERS).map((u) => ROLES.includes(u.role) ? u : { ...u, role: "ops" }));
   const [session, setSession] = useState(() => read(SESSION_KEY, null));
-  // Per-role page grants, overridable from Access Control.
-  const [grants, setGrants] = useState(() => read("ac.grants", ROLE_PAGES));
+  // Per-role page grants, overridable from Access Control. Keys for removed
+  // roles are dropped; a role added since is seeded from its default.
+  const [grants, setGrants] = useState(() => {
+    const saved = read("ac.grants", {});
+    return Object.fromEntries(
+      ROLES.filter((r) => r !== "super_admin")
+        .map((r) => [r, saved[r] ?? ROLE_PAGES[r] ?? []])
+    );
+  });
 
   useEffect(() => { write(USERS_KEY, users); }, [users]);
   useEffect(() => { write("ac.grants", grants); }, [grants]);
