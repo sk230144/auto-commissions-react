@@ -377,12 +377,19 @@ input::placeholder{color:var(--ink-3);opacity:.8}
 .grp-head h2{margin:0;font-size:14.5px;font-weight:700;letter-spacing:-.01em}
 /* A left rule ties the stack of cards to its group heading. */
 .oi-card{border-left:3px solid var(--pri-line)}
-.oi-top{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}
+.oi-top{display:flex;gap:14px 18px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
 .oi-title{margin:0 0 7px;font-size:14px;font-weight:650;line-height:1.45;letter-spacing:-.005em}
 .oi-chips{display:flex;gap:6px;flex-wrap:wrap}
-.oi-side{flex:0 1 320px;min-width:0;text-align:right}
-.oi-parties{display:flex;flex-direction:column;gap:2px;align-items:flex-end;margin-bottom:6px}
-.oi-party{font-size:12px;font-weight:600;color:var(--pri)}
+/* The two halves size to their own content — neither stretches to match the
+   taller one, which is what left the empty block under the chips. */
+.oi-top>div{align-self:flex-start}
+.oi-head{flex:1 1 380px;min-width:0}
+.oi-side{flex:0 1 340px;min-width:0;text-align:right}
+/* Parties wrap inline as chips. One-per-line stacked nine dealers into a
+   column and dragged the whole header tall, leaving a hole beside the title. */
+.oi-parties{display:flex;flex-wrap:wrap;gap:4px 5px;justify-content:flex-end;margin-bottom:7px}
+.oi-party{font-size:11px;font-weight:600;color:var(--pri);background:var(--pri-soft);
+  border:1px solid var(--pri-line);border-radius:5px;padding:1.5px 6px;line-height:1.5}
 .oi-facts{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;font-size:12px;color:var(--ink-3)}
 .oi-stake{font-family:var(--mono);font-weight:700;color:var(--ink)}
 /* The narrative. Measure is capped because these run to whole paragraphs and

@@ -118,7 +118,7 @@ function ItemCard({ item, canAct, busy, onResolve }) {
     <div className="card oi-card">
       <div className="card-b">
         <div className="oi-top">
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="oi-head">
             <h3 className="oi-title">{item.title}</h3>
             <div className="oi-chips">
               {det.subkind && <Badge kind="mut">{det.subkind}</Badge>}
