@@ -37,7 +37,11 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
 
   function clear() {
     const blank = {};
-    groups.forEach((g) => (blank[g.key] = []));
+    groups.forEach((g) => {
+      blank[g.key] = [];
+      // Clear must empty the free-text box too, or a filter survives "Clear".
+      if (g.contains) blank[`${g.key}~`] = "";
+    });
     if (dateRange) { blank[`${dateRange.key}From`] = ""; blank[`${dateRange.key}To`] = ""; }
     setDraft(blank);
     onApply(blank);
@@ -61,6 +65,15 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
           {groups.map((g) => (
             <div className="fg" key={g.key}>
               <div className="fg-h">{g.label}</div>
+
+              {/* Where the tick list covers only part of the data, a free-text
+                  box is the only way to reach a value that is not offered. */}
+              {g.contains && (
+                <input className="fg-contains" placeholder={`Any ${g.label.toLowerCase()} containing…`}
+                  value={draft[`${g.key}~`] || ""}
+                  onChange={(e) => setDraft({ ...draft, [`${g.key}~`]: e.target.value })} />
+              )}
+
               <div className={"fg-list" + (g.scroll === false ? "" : " scroll")}>
                 {/* Distinguishes "this field is blank on every row" from "no rows
                     loaded at all" — the panel is disabled entirely in the latter case. */}
@@ -74,6 +87,9 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
                   </label>
                 ))}
               </div>
+
+              {/* Never let a partial list pass for the whole set. */}
+              {g.note && <div className="fg-note">{g.note}</div>}
             </div>
           ))}
 

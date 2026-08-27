@@ -105,28 +105,51 @@ export default function Settings({ group }) {
   // Filter facets can't come from the server here (no facet endpoint on this
   // surface), so the panel offers the values present on the loaded page. Ops
   // are chosen per column kind.
-  const filterGroups = useMemo(() => cols
-    .filter((c) => c.name !== "id" && c.kind === "text")
-    .slice(0, 4)
-    .map((c) => ({
-      key: c.name, label: c.label || c.name, field: c.name,
-      options: [...new Set(rows.map((r) => r[c.name]).filter((v) => v !== null && v !== ""))]
-        .sort().slice(0, 200).map((value) => ({ value, count: rows.filter((r) => r[c.name] === value).length })),
-    })), [cols, rows]);
+  /**
+   * These endpoints return no facets and there is no distinct-values call, so
+   * the tick list can only be built from the rows currently loaded. On
+   * pay_schedule that is 100 rows out of ~32,000 — a handful of the dealers
+   * that exist.
+   *
+   * Rather than let a partial list pass for the whole set, each group says how
+   * far it actually sees and carries a free-text box, which the server matches
+   * with `contains` across the entire table. Complete tick lists need a facet
+   * endpoint on this surface.
+   */
+  const filterGroups = useMemo(() => {
+    const partial = total > rows.length;
+    return cols
+      .filter((c) => c.name !== "id" && c.kind === "text")
+      .slice(0, 4)
+      .map((c) => ({
+        key: c.name, label: c.label || c.name, field: c.name,
+        contains: true,
+        note: partial
+          ? `Ticks cover the ${rows.length} rows on this page. Use the box above to match across all ${total.toLocaleString()}.`
+          : undefined,
+        options: [...new Set(rows.map((r) => r[c.name]).filter((v) => v !== null && v !== ""))]
+          .sort().slice(0, 200)
+          .map((value) => ({ value, count: rows.filter((r) => r[c.name] === value).length })),
+      }));
+  }, [cols, rows, total]);
 
-  // The panel speaks {key: [values]}; the API speaks a filters[] array.
+  // The panel speaks {key: [values]} plus {key~: text}; the API speaks filters[].
   const panelValue = useMemo(() => {
     const v = {};
     for (const g of filterGroups) {
       v[g.key] = filters.find((f) => f.column === g.key && f.op === "in")?.values || [];
+      v[`${g.key}~`] = filters.find((f) => f.column === g.key && f.op === "contains")?.value || "";
     }
     return v;
   }, [filters, filterGroups]);
 
   const applyPanel = (val) => {
-    const next = filterGroups
-      .filter((g) => val[g.key]?.length)
-      .map((g) => ({ column: g.key, op: "in", values: val[g.key] }));
+    const next = [];
+    for (const g of filterGroups) {
+      if (val[g.key]?.length) next.push({ column: g.key, op: "in", values: val[g.key] });
+      const text = (val[`${g.key}~`] || "").trim();
+      if (text) next.push({ column: g.key, op: "contains", value: text });
+    }
     setFilters(next);
     setOffset(0);
   };
