@@ -1,208 +1,261 @@
-import { useMemo, useState } from "react";
-import { Search, Download, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Search, Download, ArrowUp, ArrowDown } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { csvDownload, today, trunc } from "../lib/fmt.js";
+import { moneyC, csvDownload, trunc } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Modal } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Tip } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import FilterPanel from "../components/FilterPanel.jsx";
 
-const MICRO = 1000000; // 1 USD = 1,000,000 micro-USD
+const LIMIT = 100;
 
-const GROUP_TITLE = { DEALER: "Dealer Rates", REP: "Sales Rep Rates" };
-const GROUP_SUB = {
-  DEALER: "The redline each dealer is priced against, and the milestone schedule that releases it. A deal is priced by the card in force on its sale date.",
-  REP: "The rate cards that price sales-rep pay. Same in-force rule: the card that was live on the sale date is the one that applies.",
+const TITLE = { DEALER: "Dealer Rates", REP: "Sales Rep Rates" };
+const SUB = {
+  DEALER: "The rate cards the engine prices dealer pay from. A deal is priced by the row in force on its sale date — so these are date-effective, and an expired row still explains an old payment.",
+  REP: "The rate cards that price sales-rep pay. Same in-force rule: the row that was live on the sale date is the one that applies.",
 };
 
-/** $/W from micro-USD, shown to the precision the rate actually carries. */
-const rateUsd = (micro) => micro == null ? null : micro / MICRO;
-const fmtRate = (micro) => micro == null ? "—" : `$${rateUsd(micro).toFixed(3)}/W`;
+/**
+ * Only numbers are right-aligned, so digits line up by place value. Dates and
+ * text read from the left. The header and the cell MUST use this same rule —
+ * aligning one and not the other is what makes a column look shuffled.
+ */
+const isNum = (kind) => kind === "money" || kind === "decimal" || kind === "int";
+
+/** Which filter operators each column kind accepts, per the API contract. */
+const OPS_FOR = {
+  text: ["contains", "eq", "in", "blank", "not_blank"],
+  date: ["eq", "from", "to", "blank", "not_blank"],
+  money: ["eq", "min", "max", "blank", "not_blank"],
+  decimal: ["eq", "min", "max", "blank", "not_blank"],
+  int: ["eq", "min", "max", "blank", "not_blank"],
+};
 
 /**
- * Rate cards — this service's own pricing records, and what the Pipeline's
- * "needs rate" check resolves against.
+ * Renders one cell by its declared kind.
  *
- * Scope: the reference app also browses a much larger settings registry (Pay
- * Schedule, Loan Fees, Rep Pay Settings, …). That registry has no API yet, so
- * this page covers only the rate-card endpoints that exist and says so rather
- * than showing empty tables that look like missing data.
+ * The critical rule: only `money` is cents. A `decimal` is a rate or a
+ * percentage as an exact string — formatting 0.20/W as cents would show 20¢ and
+ * turn an $820 override into $8, so decimals are printed verbatim.
+ */
+function Cell({ col, value }) {
+  if (value === null || value === undefined || value === "") {
+    return <span className="gap">—</span>;
+  }
+  switch (col.kind) {
+    case "money": return <span className="num">{moneyC(value)}</span>;
+    // Wildcards are real data on these tables: "~" matches anything, "∞" = no ceiling.
+    case "decimal": return <span className="num">{String(value)}</span>;
+    case "int": return <span className="num">{value}</span>;
+    default: {
+      const s = String(value);
+      return s.length > 28 ? <Tip text={s}>{trunc(s, 28)}</Tip> : s;
+    }
+  }
+}
+
+/**
+ * The settings registry — ten date-effective tables per rail, one tab at a time.
+ *
+ * The column schema arrives with the rows, so this single grid renders every
+ * tab and a column added server-side appears with no client change.
  */
 export default function Settings({ group }) {
-  const party_type = group === "REP" ? "rep" : "dealer";
+  const rail = group === "REP" ? "rep" : "dealer";
   const { say } = useStore();
-  const [q, setQ] = useState("");
+
+  const [table, setTable] = useState("");
   const [showAll, setShowAll] = useState(false);
-  const [form, setForm] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
+  const [filters, setFilters] = useState([]);
+  const [sort, setSort] = useState(null);        // {column, dir}
+  const [offset, setOffset] = useState(0);
 
   const search = useDebounced(q, 350);
 
-  // The endpoint filters by exact payee_id only, so the free-text box filters
-  // client-side over the returned set.
-  const cardsQ = useApi((signal) => api.rateCards({ party_type }, { signal }), [party_type]);
-  const all = cardsQ.data || [];
+  // Switching rail resets everything — the tabs and columns are different.
+  useEffect(() => {
+    setTable(""); setShowAll(false); setQ(""); setFilters([]); setSort(null); setOffset(0);
+  }, [rail]);
 
-  const rows = useMemo(() => {
-    let out = showAll ? all : all.filter((c) => c.in_force);
-    if (search.trim()) {
-      const s = search.toLowerCase();
-      out = out.filter((c) => [c.payee_id, c.state, fmtRate(c.redline_rate_micro_usd)]
-        .join(" ").toLowerCase().includes(s));
+  const tabsQ = useApi((signal) => api.ratesSummaryFor(rail)({ signal }), [rail]);
+  const tabs = tabsQ.data?.tabs || [];
+
+  const rowsQ = useApi(
+    (signal) => api.ratesFor(rail)({
+      table, all: showAll, search, filters,
+      sort: sort?.column, sort_dir: sort?.dir,
+      limit: LIMIT, offset,
+    }, { signal }),
+    [rail, table, showAll, search, JSON.stringify(filters), JSON.stringify(sort), offset]
+  );
+
+  const d = rowsQ.data;
+  const cols = d?.columns || [];
+  const rows = d?.rows || [];
+  const total = d?.total ?? 0;
+  // The server echoes which tab it actually served, so the strip follows the
+  // response rather than optimistic local state.
+  const activeTable = d?.table || table;
+
+  const reset = (fn) => (v) => { fn(v); setOffset(0); };
+  const pick = (t) => { setTable(t); setFilters([]); setSort(null); setQ(""); setOffset(0); };
+
+  // Filter facets can't come from the server here (no facet endpoint on this
+  // surface), so the panel offers the values present on the loaded page. Ops
+  // are chosen per column kind.
+  const filterGroups = useMemo(() => cols
+    .filter((c) => c.name !== "id" && c.kind === "text")
+    .slice(0, 4)
+    .map((c) => ({
+      key: c.name, label: c.label || c.name, field: c.name,
+      options: [...new Set(rows.map((r) => r[c.name]).filter((v) => v !== null && v !== ""))]
+        .sort().slice(0, 200).map((value) => ({ value, count: rows.filter((r) => r[c.name] === value).length })),
+    })), [cols, rows]);
+
+  // The panel speaks {key: [values]}; the API speaks a filters[] array.
+  const panelValue = useMemo(() => {
+    const v = {};
+    for (const g of filterGroups) {
+      v[g.key] = filters.find((f) => f.column === g.key && f.op === "in")?.values || [];
     }
-    return out;
-  }, [all, showAll, search]);
+    return v;
+  }, [filters, filterGroups]);
+
+  const applyPanel = (val) => {
+    const next = filterGroups
+      .filter((g) => val[g.key]?.length)
+      .map((g) => ({ column: g.key, op: "in", values: val[g.key] }));
+    setFilters(next);
+    setOffset(0);
+  };
+  const filterCount = filters.length;
+
+  const toggleSort = (name) => {
+    setOffset(0);
+    setSort((s) => s?.column !== name ? { column: name, dir: "asc" }
+      : s.dir === "asc" ? { column: name, dir: "desc" }
+      : null);
+  };
 
   function exportCsv() {
-    const header = ["payee_id", "state", "redline $/W", "effective_from", "effective_to", "in_force", "stages"];
-    const body = rows.map((c) => [c.payee_id, c.state || "(all)",
-      rateUsd(c.redline_rate_micro_usd)?.toFixed(3) ?? "", c.effective_from, c.effective_to || "",
-      c.in_force ? "yes" : "no", (c.schedule || []).length]);
-    csvDownload(`${party_type} rate cards`, header, body) ? say("Exported") : say("Nothing to export", true);
+    const header = cols.map((c) => c.label || c.name);
+    const body = rows.map((r) => cols.map((c) => {
+      const v = r[c.name];
+      if (v === null || v === undefined) return "";
+      return c.kind === "money" ? (v / 100).toFixed(2) : String(v);
+    }));
+    csvDownload(`${rail} ${activeTable}`, header, body)
+      ? say(`Exported ${rows.length} rows (this page)`)
+      : say("Nothing to export", true);
   }
 
-  async function save() {
-    const rate = Number(form.rate);
-    if (!form.payee_id.trim()) return say("Payee is required", true);
-    if (!form.effective_from) return say("Effective from is required", true);
-    if (!Number.isFinite(rate) || rate < 0) return say("Redline must be a number", true);
-    setBusy(true);
-    try {
-      await api.createRateCard({
-        party_type,
-        payee_id: form.payee_id.trim(),
-        state: form.state.trim(),
-        redline_rate_micro_usd: Math.round(rate * MICRO),
-        schedule: [],
-        effective_from: form.effective_from,
-      });
-      setForm(null);
-      say("Rate card created");
-      cardsQ.reload();
-    } catch (e) {
-      say(e.message, true);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const countLine = rowsQ.loading ? "loading…" : rowsQ.error ? "—"
+    : `${total.toLocaleString()} row${total === 1 ? "" : "s"}`
+      + (d?.active_only ? ` in force on ${d.as_of}` : " (incl. expired)");
 
   return (
     <>
-      <PageHead eyebrow="Rate cards" title={GROUP_TITLE[group]}
-        count={cardsQ.loading ? "loading…" : cardsQ.error ? "—" : `${rows.length} of ${all.length} cards`}>
+      <PageHead eyebrow="Rate cards" title={TITLE[group]} count={countLine}>
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>
           <Download size={14} strokeWidth={2} />Export CSV
-        </button>
-        <button className="btn pri" onClick={() => setForm({ payee_id: "", state: "", rate: "", effective_from: today() })}>
-          <Plus size={14} strokeWidth={2} />New rate card
         </button>
       </PageHead>
 
       <div className="pagebody">
-        <div className="sub">{GROUP_SUB[group]}</div>
+        <div className="sub">{SUB[group]}</div>
+
+        {/* Tab strip. Badges count non-voided rows and are NOT date-filtered, so
+            a badge and the footer legitimately differ when "show all" is off. */}
+        <div className="tiles" style={{ marginBottom: 16 }}>
+          {tabsQ.loading && Array.from({ length: 10 }, (_, i) => (
+            <div className="tile" key={i}><span className="sk" style={{ width: 100 }} /></div>
+          ))}
+          {tabs.map((t) => (
+            <button key={t.table} className={"tile" + (t.table === activeTable ? " on" : "")}
+              onClick={() => pick(t.table)}>
+              <div className="t">
+                {t.label}
+                {t.no_sheet_source && <Tip text="Introduced by the app — never in SETTINGS.xlsx."> ★</Tip>}
+              </div>
+              <div className="c">
+                {t.count === null ? "–" : `${t.count.toLocaleString()} rows`}
+                {t.readonly && " · read-only"}
+              </div>
+            </button>
+          ))}
+        </div>
 
         <div className="card">
           <div className="card-h">
-            <h2>Rate cards</h2>
+            <h2>{d?.label || "Rows"}</h2>
+            {d?.readonly && <Badge kind="mut">read-only</Badge>}
             <div className="sp" />
             <label className="row" style={{ gap: 5, fontSize: 12.5, color: "var(--ink-3)" }}>
               <input type="checkbox" style={{ width: "auto" }} checked={showAll}
-                onChange={(e) => setShowAll(e.target.checked)} />
-              show all (incl. expired)
+                onChange={(e) => reset(setShowAll)(e.target.checked)} />
+              <Tip text="Drops the effective-date filter, revealing expired and future-dated rows. Voided rows are never shown.">
+                show all (incl. expired)
+              </Tip>
             </label>
-            <div className="search" style={{ width: 220 }}>
+            <FilterPanel groups={filterGroups} value={panelValue} onApply={applyPanel}
+              count={filterCount} disabled={!rows.length}
+              disabledReason={rowsQ.error ? "Rows could not be loaded, so there is nothing to filter."
+                : rowsQ.loading ? "Loading rows…" : "No rows to filter."} />
+            <div className="search" style={{ width: 210 }}>
               <span className="mag"><Search size={14} strokeWidth={2} /></span>
-              <input placeholder="Payee or state…" value={q} onChange={(e) => setQ(e.target.value)} />
+              {/* Search here matches TEXT columns only — unlike the money screens. */}
+              <input placeholder="Search text columns…" value={q}
+                onChange={(e) => reset(setQ)(e.target.value)} />
             </div>
           </div>
 
           <div className="card-b flush">
-            <Async q={cardsQ} what="rate cards" isEmpty={!rows.length}
-              skeleton={<TableSkeleton cols={6} />}
-              empty={search ? "No rate cards match that search."
-                : showAll ? "No rate cards recorded." : "No rate cards currently in force."}>
-              <div className="tblwrap">
+            <Async q={rowsQ} what="these settings" isEmpty={!rows.length}
+              skeleton={<TableSkeleton cols={8} />}
+              empty={search || filterCount
+                ? "No rows match that search or those filters."
+                : showAll ? "No rows in this table."
+                : `No rows in force on ${d?.as_of || "today"} — tick "show all" to include expired.`}>
+              <div className={"tblwrap" + (rowsQ.refreshing ? " refreshing" : "")}>
                 <table>
                   <thead>
                     <tr>
-                      <th>Payee</th><th>State</th><th className="r">Redline</th>
-                      <th>Effective from</th><th>Effective to</th><th>Stages</th><th>Status</th>
+                      {cols.map((c) => {
+                        const on = sort?.column === c.name;
+                        return (
+                          <th key={c.name} onClick={() => toggleSort(c.name)}
+                            className={isNum(c.kind) ? "r" : ""}
+                            style={{ cursor: "pointer", whiteSpace: "nowrap" }}
+                            title={`Sort by ${c.label || c.name}`}>
+                            {c.label || c.name}
+                            {on && (sort.dir === "asc"
+                              ? <ArrowUp size={11} style={{ marginLeft: 4, verticalAlign: -1 }} />
+                              : <ArrowDown size={11} style={{ marginLeft: 4, verticalAlign: -1 }} />)}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((c) => (
-                      <tr key={c.id}>
-                        <td title={c.payee_id}><b>{trunc(c.payee_id, 28)}</b></td>
-                        {/* No state means the card applies everywhere — not that it is missing. */}
-                        <td>{c.state || <span style={{ color: "var(--ink-3)" }}>all states</span>}</td>
-                        <td className="r num">{fmtRate(c.redline_rate_micro_usd)}</td>
-                        <td>{c.effective_from || <span className="gap">—</span>}</td>
-                        <td>{c.effective_to || <span style={{ color: "var(--ink-3)" }}>open-ended</span>}</td>
-                        <td className="num">{(c.schedule || []).length || <span style={{ color: "var(--ink-3)" }}>—</span>}</td>
-                        <td>
-                          <Badge kind={c.in_force ? "ok" : "mut"}>
-                            {c.in_force && <span className="pip" />}{c.in_force ? "in force" : "not in force"}
-                          </Badge>
-                        </td>
+                    {rows.map((r) => (
+                      <tr key={r.id}>
+                        {cols.map((c) => (
+                          <td key={c.name} className={isNum(c.kind) ? "r" : ""}>
+                            <Cell col={c} value={r[c.name]} />
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              <Pager total={total} limit={LIMIT} offset={offset} onOffset={setOffset} busy={rowsQ.refreshing} />
             </Async>
           </div>
         </div>
-
-        {/* Stated rather than silently omitted: an absent screen should not look
-            like an empty one. */}
-        <div className="card">
-          <div className="card-h"><h2>Settings registry</h2></div>
-          <div className="card-b">
-            <div className="sub" style={{ margin: 0 }}>
-              The reference app also browses Pay Schedule, Loan Fees, Rep Pay Settings and the rest of
-              the settings registry. <b>That registry has no API yet</b> — only the rate-card endpoints
-              above exist, so those tables are deliberately not shown here rather than rendered empty.
-            </div>
-          </div>
-        </div>
       </div>
-
-      {form && (
-        <Modal title="New rate card"
-          why="Cards are never edited in place — a rate change is a new card with a later effective date. The card in force on a deal's sale date is the one that prices it."
-          onClose={() => setForm(null)}>
-          <div className="grid">
-            <div>
-              <label className="f">Payee *</label>
-              <input autoFocus value={form.payee_id} placeholder="UNTD"
-                onChange={(e) => setForm({ ...form, payee_id: e.target.value })} />
-            </div>
-            <div>
-              <label className="f">State</label>
-              <input value={form.state} placeholder="blank = all states"
-                onChange={(e) => setForm({ ...form, state: e.target.value })} />
-            </div>
-            <div>
-              <label className="f">Redline $/W *</label>
-              <input type="number" step="0.001" value={form.rate} placeholder="2.500"
-                onChange={(e) => setForm({ ...form, rate: e.target.value })} />
-            </div>
-            <div>
-              <label className="f">Effective from *</label>
-              <input type="date" value={form.effective_from}
-                onChange={(e) => setForm({ ...form, effective_from: e.target.value })} />
-            </div>
-          </div>
-          <div className="submeta" style={{ marginTop: 10 }}>
-            The payee must match the tape's spelling exactly, or coverage will never match and
-            every deal for them will show as <b>needs rate</b>.
-          </div>
-          <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-            <button className="btn" onClick={() => setForm(null)}>Cancel</button>
-            <button className="btn pri" disabled={busy} onClick={save}>Create card</button>
-          </div>
-        </Modal>
-      )}
     </>
   );
 }

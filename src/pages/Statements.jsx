@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Search, Download } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload, trunc } from "../lib/fmt.js";
+import { moneyC, csvDownload } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Async, TableSkeleton, Pager, Badge } from "../components/ui.jsx";
+import { Async, TableSkeleton, Pager } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
-import LineDrawer from "../components/LineDrawer.jsx";
 
 const LIMIT = 25;
 const STALE_MS = 24 * 3600 * 1000;
@@ -20,8 +20,7 @@ export default function Statements() {
   const { eco, say } = useStore();
   const [q, setQ] = useState("");
   const [offset, setOffset] = useState(0);
-  const [party, setParty] = useState(null);
-  const [open, setOpen] = useState(null);
+  const nav = useNavigate();
 
   const search = useDebounced(q, 350);
 
@@ -36,16 +35,6 @@ export default function Statements() {
   const total = q1.data?.total ?? 0;
   const t = q1.data?.totals;
   const run = q1.data?.engine_run;
-
-  // A party's lines, fetched only when a row is expanded.
-  const detailQ = useApi(
-    (signal) => api.paymentLines(
-      { party_type: eco, tab: "", filter: { dealers: [party] }, show_zeros: true, show_all_dates: true, limit: 100 },
-      { signal }),
-    [eco, party],
-    { enabled: !!party }
-  );
-  const detail = detailQ.data?.payments || [];
 
   const staleRun = run?.run_at && (Date.now() - Date.parse(run.run_at)) > STALE_MS;
 
@@ -108,7 +97,8 @@ export default function Statements() {
                     {rows.map((g) => (
                       <tr key={g.party}>
                         <td>
-                          <a href="#" onClick={(e) => { e.preventDefault(); setParty(g.party === party ? null : g.party); }}>
+                          <a href={`#/stmt/${encodeURIComponent(g.party)}`}
+                            onClick={(e) => { e.preventDefault(); nav(`/stmt/${encodeURIComponent(g.party)}`); }}>
                             {g.party}
                           </a>
                         </td>
@@ -138,51 +128,8 @@ export default function Statements() {
           </div>
         </div>
 
-        {party && (
-          <div className="card">
-            <div className="card-h">
-              <h2>{party}</h2>
-              <div className="sp" />
-              <button className="btn sm" onClick={() => setParty(null)}>Close</button>
-            </div>
-            <div className="card-b flush">
-              <Async q={detailQ} what={`lines for ${trunc(party, 24)}`} isEmpty={!detail.length}
-                skeleton={<TableSkeleton cols={7} />}
-                empty="No lines recorded for this party.">
-                <div className="tblwrap">
-                  <table>
-                    <thead>
-                      <tr><th>OUR#</th><th>Kind</th><th>Milestone</th><th>Date</th>
-                        <th className="r">Amount</th><th className="r">Settled</th>
-                        <th className="r">Balance</th><th>Status</th></tr>
-                    </thead>
-                    <tbody>
-                      {detail.map((l) => (
-                        <tr key={l.line_key}>
-                          <td className="id">
-                            <a href="#" onClick={(e) => { e.preventDefault(); setOpen(l); }}>{l.our_reference}</a>
-                          </td>
-                          <td>{l.kind}</td>
-                          <td>{l.trigger}</td>
-                          <td>{l.trigger_date || <span className="gap">—</span>}</td>
-                          <td className="r num">{moneyC(l.amount_cents)}</td>
-                          <td className="r num">{moneyC(l.settled_cents)}</td>
-                          <td className="r num">{moneyC(l.balance_cents)}</td>
-                          <td><Badge kind={l.tab === "payment_records" ? "ok" : l.tab === "on_hold" ? "bad" : "mut"}>
-                            {l.tab?.replace(/_/g, " ")}
-                          </Badge></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Async>
-            </div>
-          </div>
-        )}
       </div>
 
-      {open && <LineDrawer line={open} onClose={() => setOpen(null)} />}
     </>
   );
 }

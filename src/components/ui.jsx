@@ -34,6 +34,16 @@ export function Badge({ kind = "mut", title, children }) {
  * `title` stays on the element too: it is the path for touch long-press, where
  * :hover never fires.
  */
+/**
+ * Whether this device has real hover. On a mouse the styled bubble is the
+ * tooltip and a native `title` would render a SECOND one beside it; on touch
+ * there is no hover at all, so `title` (long-press) is the only path. Checked
+ * once at module load rather than per render.
+ */
+const CAN_HOVER = typeof window !== "undefined" && typeof window.matchMedia === "function"
+  ? window.matchMedia("(hover: hover)").matches
+  : true;
+
 export function Tip({ text, children, className = "", as: Tag = "span" }) {
   const [box, setBox] = useState(null);
   const ref = useRef(null);
@@ -56,7 +66,11 @@ export function Tip({ text, children, className = "", as: Tag = "span" }) {
 
   return (
     <>
-      <Tag ref={ref} className={`tip ${className}`.trim()} title={text} tabIndex={0}
+      {/* No `title` where hover works — it would draw a second, unstyled
+          tooltip next to this one. aria-label keeps the full text available to
+          screen readers either way. */}
+      <Tag ref={ref} className={`tip ${className}`.trim()} tabIndex={0}
+        title={CAN_HOVER ? undefined : text} aria-label={text}
         onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
         {children}
       </Tag>

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Search, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store.jsx";
-import { money, moneyC, csvDownload, trunc } from "../lib/fmt.js";
+import { moneyC, csvDownload, trunc } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Tip } from "../components/ui.jsx";
@@ -54,6 +54,10 @@ export default function Pipeline() {
     (signal) => api.pipelineSummary({ party_type: eco, bucket, search, filter: apiFilter }, { signal }),
     [key]
   );
+  // The KPI strip is money, and describes the whole ecosystem — it deliberately
+  // ignores the bucket/search/filter the table is under.
+  const cardsQ = useApi((signal) => api.pipelineCards(eco, { signal }), [eco]);
+  const c = cardsQ.data;
 
   const rows = rowsQ.data?.projects || [];
   const total = rowsQ.data?.total ?? 0;
@@ -104,12 +108,23 @@ export default function Pipeline() {
       </Tip>
     );
 
+  /**
+   * The KPI strip is about MONEY and covers the whole eco, so it comes from
+   * /pipeline/cards and clicks through to the Payments tabs. Note "Needs rate"
+   * here counts unpriced ledger *lines*, whereas the summary's `needs_rate`
+   * counts *projects* missing coverage — different units, deliberately.
+   */
   const tiles = [
-    { k: "Active", v: s?.buckets?.active, tone: "due", b: "active" },
-    { k: "Jeopardy", v: s?.buckets?.jeopardy, tone: "pend", b: "jeopardy" },
-    { k: "On hold", v: s?.buckets?.hold, tone: "held", b: "hold" },
-    { k: "Needs rate", v: s?.needs_rate, tone: "held", sub: "unpriced — blocks pay" },
-    { k: "Pre-install projects", v: s?.projects, tone: "info", b: "" },
+    { k: "Pending approval", v: c && moneyC(c.pending_cents), sub: c && `${c.pending_lines.toLocaleString()} lines`,
+      tone: "pend", live: c?.pending_lines > 0, to: "/pending" },
+    { k: "Ready to pay", v: c && moneyC(c.ready_cents), sub: c && `${c.ready_lines.toLocaleString()} lines`,
+      tone: "due", live: c?.ready_lines > 0, to: "/ready" },
+    { k: "Needs rate", v: c && c.needs_rate_lines.toLocaleString(), sub: "unpriced — blocks pay",
+      tone: "held", live: c?.needs_rate_lines > 0, to: "/pending" },
+    { k: "On hold", v: c && c.on_hold_lines.toLocaleString(), sub: "held with a reason",
+      tone: "held", live: c?.on_hold_lines > 0, to: "/hold" },
+    { k: "Paid lines", v: c && c.paid_lines.toLocaleString(), sub: "settled",
+      tone: "info", live: c?.paid_lines > 0, to: "/paid" },
   ];
 
   return (
@@ -122,15 +137,15 @@ export default function Pipeline() {
       </PageHead>
 
       <div className="pagebody">
-        <div className={"kpis" + (sumQ.refreshing ? " refreshing" : "")}>
+        <div className={"kpis" + (cardsQ.refreshing ? " refreshing" : "")}>
           {tiles.map((t) => (
-            <button key={t.k} className={`kpi ${t.tone}` + (t.v ? "" : " quiet")}
-              onClick={() => t.b !== undefined && setB(t.b)} disabled={t.b === undefined}>
+            <button key={t.k} className={`kpi ${t.tone}` + (t.live ? "" : " quiet")}
+              onClick={() => nav(t.to)}>
               <span className="dot" />
               <div className="k">{t.k}</div>
-              <div className="v">{sumQ.loading ? <span className="sk" style={{ width: 54, height: 15 }} />
-                : sumQ.error ? "—" : (t.v ?? 0).toLocaleString()}</div>
-              {t.sub && <div className="c">{t.v ? t.sub : "nothing here"}</div>}
+              <div className="v">{cardsQ.loading ? <span className="sk" style={{ width: 72, height: 15 }} />
+                : cardsQ.error ? "—" : t.v}</div>
+              <div className="c">{cardsQ.error ? "could not load" : t.live ? t.sub : "nothing here"}</div>
             </button>
           ))}
         </div>
@@ -184,7 +199,7 @@ export default function Pipeline() {
                     {rows.map((r) => (
                       <tr key={r.our_reference}>
                         <td className="id">
-                          <a href="#" onClick={(e) => { e.preventDefault(); setOpen(r); }}>{r.our_reference}</a>
+                          <a href="#" onClick={(e) => { e.preventDefault(); setOpen(r.our_reference); }}>{r.our_reference}</a>
                         </td>
                         <td>
                           {r.customer_name
@@ -228,7 +243,7 @@ export default function Pipeline() {
         </div>
       </div>
 
-      {open && <ProjectDrawer project={open} onClose={() => setOpen(null)} />}
+      {open && <ProjectDrawer our={open} onClose={() => setOpen(null)} />}
     </>
   );
 }

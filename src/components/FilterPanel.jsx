@@ -10,7 +10,8 @@ import { Filter } from "lucide-react";
  * groups: [{ key, label, options: [{ value, count }], scroll? }]
  * dateRange: { key, label } | undefined — renders a from/to pair under `${key}From` / `${key}To`
  */
-export default function FilterPanel({ groups, dateRange, value, onApply, count = 0 }) {
+export default function FilterPanel({ groups, dateRange, value, onApply, count = 0,
+  disabled = false, disabledReason }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const ref = useRef(null);
@@ -50,16 +51,20 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
 
   return (
     <div className="filterwrap" ref={ref}>
-      <button className={"btn" + (count ? " pri" : "")} onClick={() => setOpen((o) => !o)}>
+      <button className={"btn" + (count ? " pri" : "")} disabled={disabled}
+        title={disabled ? disabledReason : undefined}
+        onClick={() => setOpen((o) => !o)}>
         <Filter size={14} strokeWidth={2} />+ Filter{count > 0 ? ` (${count})` : ""}
       </button>
-      {open && (
+      {open && !disabled && (
         <div className="filterpop">
           {groups.map((g) => (
             <div className="fg" key={g.key}>
               <div className="fg-h">{g.label}</div>
               <div className={"fg-list" + (g.scroll === false ? "" : " scroll")}>
-                {g.options.length === 0 && <div className="fg-empty">Nothing to filter.</div>}
+                {/* Distinguishes "this field is blank on every row" from "no rows
+                    loaded at all" — the panel is disabled entirely in the latter case. */}
+                {g.options.length === 0 && <div className="fg-empty">No {g.label.toLowerCase()} recorded on any row.</div>}
                 {g.options.map((o) => (
                   <label className="fg-opt" key={o.value}>
                     <input type="checkbox" checked={(draft[g.key] || []).includes(o.value)}

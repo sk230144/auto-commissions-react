@@ -1,114 +1,81 @@
-/**
- * Payout Logic — a static reference. Two tables: what pays at each milestone, and
- * where each input comes from. This is the page people read to understand the money.
- */
+import { moneyC } from "../lib/fmt.js";
+import { useApi } from "../lib/useApi.js";
+import * as api from "../lib/api.js";
+import { Async, TableSkeleton } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 
+/**
+ * Payout Logic — how a sale becomes a payment, served by the engine itself.
+ *
+ * Every formula, rationale and worked example comes from /payout-logic rather
+ * than being written into this page. That matters: a formula transcribed into
+ * the client is a second source of truth that silently drifts the next time
+ * the engine changes, and this is the page people read to understand the money.
+ */
 export default function Logic() {
+  const q = useApi((signal) => api.payoutLogic({ signal }), []);
+  const rules = q.data?.rules || [];
+
   return (
     <>
-      <PageHead title="Payout Logic">
-        
-      </PageHead>
+      <PageHead eyebrow="Rate cards" title="Payout Logic"
+        count={q.loading ? "loading…" : q.error ? "—"
+          : `${rules.length} rule${rules.length === 1 ? "" : "s"}`} />
 
       <div className="pagebody">
-      <div className="sub">
-        How a sale becomes a payment. Every figure is computed once, server-side, and
-        stored — the screens display it, they never re-derive it.
-      </div>
-
-      <div className="card">
-          <div className="card-h"><h2>What pays, and when</h2></div>
-          <div className="card-b">
-        <div className="tblwrap">
-          <table>
-            <thead><tr><th>Milestone</th><th>Dealer line</th><th>Sales-rep line</th><th>Amount basis</th></tr></thead>
-            <tbody>
-              <tr>
-                <td><b>Sale</b></td><td>$0 — recorded</td><td>$0 — recorded</td>
-                <td>No pay trigger until NTP</td>
-              </tr>
-              <tr>
-                <td><b>NTP</b></td><td>Draw</td><td>Draw</td>
-                <td>pot × draw%, capped at draw max. A flat M1 on the rep's own row wins over the percentage.</td>
-              </tr>
-              <tr>
-                <td><b>Install</b></td><td>Commission</td><td>Commission</td>
-                <td>The full amount. Battery-only deals pay on the battery completion date instead.</td>
-              </tr>
-              <tr>
-                <td><b>Jeopardy / Hold</b></td><td>$0 — held</td><td>$0 — held</td>
-                <td>Frozen pending a decision</td>
-              </tr>
-            </tbody>
-          </table>
+        <div className="sub">
+          How a sale becomes a payment. Every figure is computed once, server-side, and stored —
+          the screens display it, they never re-derive it. These rules come from the engine, so
+          what you read here is what actually runs.
         </div>
-        </div>
-      </div>
 
-      <div className="card">
-          <div className="card-h"><h2>The formulas</h2></div>
-          <div className="card-b">
-        <pre className="pre">
-{`DEALER
-  redline = rl × watts                     rl from the Pay Schedule rate card
-  pot     = contract − redline − adders × dealer_share
-  dealer  = pot − rep share                if the rate card says Rep Pay = YES
-          = pot                            otherwise
+        <Async q={q} what="the payout logic" isEmpty={!rules.length}
+          skeleton={<div className="card"><TableSkeleton rows={6} cols={2} /></div>}
+          empty="No rules published.">
+          {rules.map((r) => (
+            <div className="card" key={r.key}>
+              <div className="card-h"><h2>{r.title}</h2></div>
+              <div className="card-b">
+                {/* The formula is code, so it is set in mono and allowed to wrap
+                    rather than being clipped — these lines are long. */}
+                <div className="pre" style={{ marginBottom: 12, whiteSpace: "pre-wrap" }}>{r.formula}</div>
 
-REP  (a separate rate card — not a share of the pot)
-  rep_rl  = base_rl − position_adj / 1000  adjustment is $/kW, redline is $/W
-  net_epc = (contract − loan_fee − adders × adder_share) / watts
-  margin  = net_epc − rep_rl               then clamped by min/max, floored at $0
-  pay     = margin × watts × mult × share  mult 0.8 on the 80/20 scales
+                {r.rationale && (
+                  <div className="sub" style={{ margin: 0, maxWidth: "84ch" }}>{r.rationale}</div>
+                )}
 
-OVERRIDE   pay_rate × watts                flat and additive — never chained
-SETTER     flat rate per sale              Install only
-
-MILESTONE RELEASE — cumulative, never additive
-  M1 pays  min(m1_amount, C)
-  M2 pays  (m2_pct × C) − M1
-  M3 pays  ((m2_pct + m3_pct) × C) − M2    released PTO + lag days`}
-        </pre>
-        </div>
-      </div>
-
-      <div className="card">
-          <div className="card-h"><h2>Where the data comes from</h2></div>
-          <div className="card-b">
-        <div className="tblwrap">
-          <table>
-            <thead><tr><th>Data</th><th>Source</th><th>Notes</th></tr></thead>
-            <tbody>
-              <tr><td>Contract, system size, adders</td><td>Tape / OWEDB</td><td>Live per lookup</td></tr>
-              <tr><td>Sale, NTP, install, PTO dates</td><td>Tape / OWEDB</td><td>Install prefers the install workspace over the summary view</td></tr>
-              <tr><td>Dealer, rep, setter</td><td>Tape / OWEDB</td><td>Names normalised before matching</td></tr>
-              <tr><td>Redline, draw %, Rep Pay flag</td><td>Pay Schedule</td><td>Entered by hand — the commercial terms</td></tr>
-              <tr><td>Rep base redline</td><td>Commission Rates</td><td>Keyed on pay scale, not the rep's name</td></tr>
-              <tr><td>Position adjustment, clamps</td><td>Rate Adjustments</td><td>Stored in $/kW</td></tr>
-              <tr><td>Which scale and position a rep is on</td><td>Rep Pay Settings</td><td>Resolved at the sale date</td></tr>
-              <tr><td>Parent override rate</td><td>Dealer Override</td><td>$/W, not a percentage</td></tr>
-              <tr><td>Google Sheets / DATA_ENTRY</td><td>— not used —</td><td>Replaced by this system</td></tr>
-            </tbody>
-          </table>
-        </div>
-        </div>
-      </div>
-
-      <div className="card">
-          <div className="card-h"><h2>Rules worth knowing</h2></div>
-          <div className="card-b">
-        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13.2, lineHeight: 1.75, color: "var(--ink-3)" }}>
-          <li>Every rate is <b>date-effective</b>. A job is priced by its <b>sale date</b>, never by today — so re-running last year's payroll reproduces last year's numbers.</li>
-          <li>A rate change means <b>end-dating the old row and inserting a new one</b>, never editing in place.</li>
-          <li>Milestone targets are <b>cumulative</b>. Treating them as additive overpays — that mistake cost 115% in a sibling system.</li>
-          <li>A <b>$0 redline</b> means no redline is subtracted, so the whole contract becomes commission.</li>
-          <li>The redline can be <b>negative</b> for some financiers. That is intentional and the sign is preserved.</li>
-          <li>Overrides are <b>flat and additive</b> across parents — never compounded down a chain.</li>
-          <li>Approval stores a <b>snapshot</b> of the amount. If the figure later changes, the line drops back to Pending.</li>
-        </ul>
-        </div>
-      </div>
+                {r.example?.length > 0 && (
+                  <>
+                    <div className="sect">Worked example</div>
+                    <div className="tblwrap">
+                      <table className="calc-tbl" style={{ width: "100%" }}>
+                        <tbody>
+                          {r.example.map((e, i) => {
+                            // The engine emits the total as the last row; a
+                            // negative amount is a subtraction from the spread.
+                            const last = i === r.example.length - 1;
+                            const neg = e.amount_cents < 0;
+                            return (
+                              <tr key={`${r.key}-${i}`} className={last ? "tot" : neg ? "neg" : undefined}>
+                                <td>
+                                  {e.label}
+                                  {e.note && <div className="submeta">{e.note}</div>}
+                                </td>
+                                <td className="r">
+                                  {e.amount_cents == null ? <span className="gap">—</span> : moneyC(e.amount_cents)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </Async>
       </div>
     </>
   );

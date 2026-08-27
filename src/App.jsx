@@ -16,6 +16,7 @@ import AskAI from "./components/AskAI.jsx";
 import Pipeline from "./pages/Pipeline.jsx";
 import Lines from "./pages/Lines.jsx";
 import Statements from "./pages/Statements.jsx";
+import StatementDetail from "./pages/StatementDetail.jsx";
 import Exposure from "./pages/Exposure.jsx";
 import Advances from "./pages/Advances.jsx";
 import Settings from "./pages/Settings.jsx";
@@ -163,6 +164,8 @@ export default function App() {
           <Route path="/paid"     element={<Lines key={eco} tab="payment_records"  title="Payment Records"  eyebrow={ECO_LABEL[eco]} />} />
           <Route path="/hold"     element={<Lines key={eco} tab="on_hold"          title="On Hold"          eyebrow={ECO_LABEL[eco]} />} />
           <Route path="/stmt"     element={<Statements />} />
+          {/* One party's lines. key remounts per party so paging resets. */}
+          <Route path="/stmt/:party" element={<StatementDetail key={eco} />} />
           <Route path="/exposure" element={<Exposure />} />
           <Route path="/advances" element={<Advances />} />
           <Route path="/dealer"   element={<Settings group="DEALER" />} />

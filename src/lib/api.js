@@ -119,6 +119,14 @@ const qs = (params) => {
 // ── Pipeline ────────────────────────────────────────────────────────────────
 export const pipelineProjects = (body, opts) => post("/pipeline/projects", clean(body), opts);
 export const pipelineSummary = (body, opts) => post("/pipeline/summary", clean(body), opts);
+/** The 5 KPI cards. Accepts ONLY party_type — a body carrying bucket/search/
+ *  filter is a 400, because the cards deliberately describe the whole eco. */
+export const pipelineCards = (party_type, opts) => post("/pipeline/cards", clean({ party_type }), opts);
+
+// ── Project drawer ──────────────────────────────────────────────────────────
+/** Header, timeline, commissions, payments and adders for one OUR#. An unknown
+ *  reference is not an error: 200 with header:null and empty arrays. */
+export const projectDetail = (our_reference, opts) => post("/projects/detail", { our_reference }, opts);
 
 // ── Payments ────────────────────────────────────────────────────────────────
 // show_zeros / show_all_dates are real booleans the server reads, so they are
@@ -147,10 +155,55 @@ export const exposureSummary = (body, opts) => post("/exposure/summary", clean(b
 export const exposureParties = (body, opts) => post("/exposure/parties", clean(body), opts);
 export const exposurePaidIncomplete = (body, opts) => post("/exposure/paid-incomplete", clean(body), opts);
 
-// ── Rate cards (GET — an older surface) ─────────────────────────────────────
-// The doc shows `data` as a bare array; the server actually returns
-// {rate_cards:[…]}. Accept either so a server fix does not break the page.
-export const rateCards = (params, opts) =>
-  get("/rate-cards" + qs(params), opts).then((d) => Array.isArray(d) ? d : (d?.rate_cards || []));
-export const createRateCard = (body, opts) => post("/rate-cards", clean(body), opts);
-export const rateCardInForce = (params, opts) => get("/rate-cards/in-force" + qs(params), opts);
+// ── Advances ────────────────────────────────────────────────────────────────
+export const advancesList = (body, opts) => post("/advances/list", clean(body), opts);
+export const advanceCreate = (body, opts) => post("/advances/create", clean(body), opts);
+/** One sign-off per call. The response's `stage` says which one just landed:
+ *  "first", or "active" when the second signature paid the principal out. */
+export const advanceApprove = (id, actor, opts) => post("/advances/approve", { id, actor }, opts);
+export const advanceCancel = (id, actor, opts) => post("/advances/cancel", { id, actor }, opts);
+export const advanceClose = (id, actor, reason, opts) => post("/advances/close", { id, actor, reason }, opts);
+export const advanceRun = (body, opts) => post("/advances/run", clean(body), opts);
+
+// ── Rate settings registry ──────────────────────────────────────────────────
+// Ten date-effective tables per rail, browsed one tab at a time. The column
+// schema travels with the rows, so one grid renders every tab.
+//
+// `all` is a real boolean the server reads (show expired + scheduled rows), so
+// it must survive `clean`, which would strip false.
+const ratesBody = (body = {}) => {
+  const { all, ...rest } = body;
+  const out = clean(rest);
+  if (typeof all === "boolean") out.all = all;
+  return out;
+};
+export const dealerRates = (body, opts) => post("/dealer-rates", ratesBody(body), opts);
+export const salesRepRates = (body, opts) => post("/sales-rep-rates", ratesBody(body), opts);
+export const dealerRatesSummary = (opts) => get("/dealer-rates/summary", opts);
+export const salesRepRatesSummary = (opts) => get("/sales-rep-rates/summary", opts);
+/** One entry point for both rails, so the page is a single component. */
+export const ratesFor = (rail) => rail === "rep" ? salesRepRates : dealerRates;
+export const ratesSummaryFor = (rail) => rail === "rep" ? salesRepRatesSummary : dealerRatesSummary;
+
+// ── Manual payments ─────────────────────────────────────────────────────────
+export const manualPaymentsList = (body, opts) => post("/manual-payments/list", clean(body), opts);
+export const manualPaymentCreate = (body, opts) => post("/manual-payments", clean(body), opts);
+export const manualPaymentSignoff = (id, actor, opts) => post("/manual-payments/signoff", { id, actor }, opts);
+export const manualPaymentCancel = (id, actor, opts) => post("/manual-payments/cancellation", { id, actor }, opts);
+
+// ── Open items ──────────────────────────────────────────────────────────────
+export const openItems = (opts) => get("/open-items", opts);
+export const resolveOpenItem = (id, body, opts) => post(`/open-items/${id}/resolution`, clean(body), opts);
+export const reopenOpenItem = (id, body, opts) => post(`/open-items/${id}/reopening`, clean(body), opts);
+export const rateGaps = (opts) => get("/rate-gaps", opts);
+
+// ── Payout logic ────────────────────────────────────────────────────────────
+/** The rules behind the money: formula, rationale and a worked example each.
+ *  Not in the integration doc, but live — and it beats hardcoding the maths in
+ *  the client, where it would drift from what the engine actually does. */
+export const payoutLogic = (opts) => get("/payout-logic", opts);
+
+// ── Tickets ─────────────────────────────────────────────────────────────────
+export const tickets = (params, opts) => get("/tickets" + qs(params), opts);
+export const ticketCreate = (body, opts) => post("/tickets", clean(body), opts);
+export const ticketUpdate = (id, body, opts) => post(`/tickets/${id}`, clean(body), opts);

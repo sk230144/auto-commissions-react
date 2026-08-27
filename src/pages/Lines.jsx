@@ -7,7 +7,7 @@ import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Confirm, Modal } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import FilterPanel, { apiFacet } from "../components/FilterPanel.jsx";
-import LineDrawer from "../components/LineDrawer.jsx";
+import ProjectDrawer from "../components/ProjectDrawer.jsx";
 
 const LIMIT = 25;
 const BLANK = { dealers: [], states: [], kinds: [], dateFrom: "", dateTo: "" };
@@ -51,7 +51,8 @@ export default function Lines({ tab, title, eyebrow }) {
 
   const rows = rowsQ.data?.payments || [];
   const stat = sumQ.data?.tabs?.[tab];
-  const total = stat?.lines ?? 0;
+  // The lines call carries its own row count; the summary supplies the money.
+  const total = rowsQ.data?.total ?? 0;
   const hidden = sumQ.data?.hidden ?? 0;
 
   const reload = () => { rowsQ.reload(); sumQ.reload(); };
@@ -122,9 +123,10 @@ export default function Lines({ tab, title, eyebrow }) {
       : say("Nothing to export", true);
   }
 
-  const countLine = sumQ.loading ? "loading…"
-    : sumQ.error ? "—"
-    : `${total.toLocaleString()} lines · ${moneyC(stat?.total_cents ?? 0)}`;
+  const countLine = rowsQ.loading || sumQ.loading ? "loading…"
+    : rowsQ.error ? "—"
+    : `${total.toLocaleString()} lines`
+      + (sumQ.error ? "" : ` · ${moneyC(stat?.total_cents ?? 0)}`);
 
   return (
     <>
@@ -201,7 +203,7 @@ export default function Lines({ tab, title, eyebrow }) {
                           )}
                         </td>}
                         <td className="id">
-                          <a href="#" onClick={(e) => { e.preventDefault(); setOpen(l); }}>{l.our_reference}</a>
+                          <a href="#" onClick={(e) => { e.preventDefault(); setOpen(l.our_reference); }}>{l.our_reference}</a>
                         </td>
                         <td>
                           <span title={l.party}>{trunc(l.party, 24)}</span>
@@ -278,7 +280,7 @@ export default function Lines({ tab, title, eyebrow }) {
         </div>
       </div>
 
-      {open && <LineDrawer line={open} onClose={() => setOpen(null)} />}
+      {open && <ProjectDrawer our={open} onClose={() => setOpen(null)} />}
       {confirm && <Confirm {...confirm} onNo={() => setConfirm(null)} />}
       {holdFor && (
         <HoldDialog line={holdFor} busy={busy} onCancel={() => setHoldFor(null)}
