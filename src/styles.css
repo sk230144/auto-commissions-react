@@ -194,7 +194,9 @@ button{font:inherit;color:inherit}
 .railfoot{border-top:1px solid var(--rail-line);padding:11px 14px;display:flex;align-items:center;gap:9px}
 .avatar{width:27px;height:27px;border-radius:50%;flex:0 0 27px;background:var(--pri-soft);color:var(--pri);
   display:grid;place-items:center;font-size:10.5px;font-weight:700}
-.railfoot .em{font-size:11px;color:var(--rail-ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Holds a name over a role now, so it is a block that clips rather than a
+   single nowrap line. min-width:0 lets it actually shrink inside the flex row. */
+.railfoot .em{font-size:11px;color:var(--rail-ink-2);overflow:hidden;flex:1 1 auto;min-width:0}
 .app.mini .railfoot .em{display:none}
 .app.mini .railfoot{padding:11px 0;justify-content:center;gap:0}
 
@@ -368,6 +370,49 @@ input::placeholder{color:var(--ink-3);opacity:.8}
 .search input{padding-left:32px}
 .search .mag{position:absolute;left:10px;color:var(--ink-3);pointer-events:none;display:grid;place-items:center}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:13px}
+
+/* ── Sign in ───────────────────────────────────────────────────────────────
+   Its own full-page layout: the shell does not mount until someone is signed
+   in, so there is no rail or header to fit around. */
+.loginwrap{min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:24px}
+.logincard{width:100%;max-width:392px;background:var(--panel);border:1px solid var(--line);
+  border-radius:16px;box-shadow:var(--shadow-lg);padding:30px 30px 24px}
+.loginbrand{margin-bottom:20px;line-height:0}
+.logincard h1{margin:0 0 4px;font-size:19px;font-weight:700;letter-spacing:-.02em}
+.loginsub{margin:0 0 22px;font-size:13px;color:var(--ink-3)}
+.pwwrap{position:relative}
+.pwwrap input{padding-right:38px}
+.pwtoggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;
+  color:var(--ink-3);cursor:pointer;padding:6px;line-height:0;border-radius:6px}
+.pwtoggle:hover{color:var(--ink)}
+.loginerr{margin-top:12px;font-size:12.5px;color:var(--held);background:var(--held-bg);
+  border-radius:8px;padding:9px 12px;line-height:1.5}
+/* The build says what it is: this gates the interface, not the data. */
+.loginnote{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);
+  font-size:11.5px;color:var(--ink-3);line-height:1.65}
+.loginnote b{color:var(--ink-2)}
+
+/* ── Role picker & page chips (user onboarding) ───────────────────────────── */
+.rolepick{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:9px;margin-bottom:6px}
+.rolecard{text-align:left;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;
+  padding:11px 13px;cursor:pointer;transition:.12s;font:inherit;color:inherit}
+.rolecard:hover{border-color:var(--line-2);background:var(--panel)}
+.rolecard.on{border-color:var(--pri);background:var(--pri-soft);box-shadow:0 0 0 1px var(--pri) inset}
+.rolecard .t{font-size:13px;font-weight:650;margin-bottom:3px}
+.rolecard.on .t{color:var(--pri)}
+.rolecard .c{font-size:11.5px;color:var(--ink-3);line-height:1.55}
+.pagechips{display:flex;flex-wrap:wrap;gap:5px}
+.pagechip{font-size:11px;font-weight:600;color:var(--ink-2);background:var(--panel-2);
+  border:1px solid var(--line);border-radius:5px;padding:2px 7px}
+
+/* A group divider inside the access matrix. */
+.matrix-grp td{background:var(--panel-2);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  font-weight:700;color:var(--ink-3)}
+
+/* The rail footer now carries a name, a role and a sign-out control. */
+.railfoot .who{font-size:12px;font-weight:600;color:var(--rail-ink);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.railfoot .role{font-size:10.5px;color:var(--rail-ink-2);text-transform:capitalize}
 
 /* ── Open Items: each item is the full case, not a table row ───────────────
    These are money rulings, so the reader needs the diagnosis, the choices and

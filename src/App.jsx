@@ -3,10 +3,11 @@ import { Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom"
 import {
   LayoutGrid, Clock, CircleCheck, FileText, TrendingUp, Receipt, PauseCircle,
   ArrowLeftRight, SlidersHorizontal, Percent, FunctionSquare, Send, CircleAlert,
-  MessageSquare, KeyRound, PanelLeftClose, PanelLeftOpen, Sun, Moon, Menu,
+  MessageSquare, KeyRound, PanelLeftClose, PanelLeftOpen, Sun, Moon, Menu, Users2, LogOut,
 } from "lucide-react";
 import { useStore } from "./lib/store.jsx";
 import { useTheme } from "./lib/theme.js";
+import { useAuth, PAGE_LABEL } from "./lib/auth.jsx";
 import { useApi } from "./lib/useApi.js";
 import * as api from "./lib/api.js";
 import { Toast } from "./components/ui.jsx";
@@ -25,6 +26,8 @@ import Pushes from "./pages/Pushes.jsx";
 import Review from "./pages/Review.jsx";
 import Tickets from "./pages/Tickets.jsx";
 import Access from "./pages/Access.jsx";
+import UsersPage from "./pages/Users.jsx";
+import Login from "./pages/Login.jsx";
 
 const ECO_LABEL = { dealer: "Dealer Pay", rep: "Sales Rep Pay" };
 const ECO_SHORT = { dealer: "Dealer", rep: "Sales Reps" };
@@ -33,8 +36,9 @@ const I = { size: 16, strokeWidth: 1.9 };
 /** Lets PageHead's hamburger open the off-canvas nav without prop threading. */
 const NavCtx = createContext({ navOpen: false, setNavOpen: () => {} });
 
-export default function App() {
-  const { eco, setEco, lines, review, advances, me } = useStore();
+function AppShell() {
+  const { eco, setEco, lines, review, advances } = useStore();
+  const { me, can, allowed, signOut } = useAuth();
   const { theme, cycle } = useTheme();
   const [mini, setMini] = useState(() => localStorage.getItem("ac.navMini") === "1");
   const [navOpen, setNavOpen] = useState(false);
@@ -86,9 +90,16 @@ export default function App() {
       { k: "push",    Ic: Send,          label: "Manual Payments" },
       { k: "review",  Ic: CircleAlert,   label: "Open Items", n: badge.review },
       { k: "tickets", Ic: MessageSquare, label: "Tickets" },
-      { k: "access",  Ic: KeyRound,      label: "Access" },
     ]},
-  ];
+    { grp: "Admin", items: [
+      { k: "users",  Ic: Users2,   label: "User Management" },
+      { k: "access", Ic: KeyRound, label: "Access Control" },
+    ]},
+  ]
+    // Only pages this role may reach. A group with nothing left disappears
+    // rather than rendering an empty heading.
+    .map((sec) => ({ ...sec, items: sec.items.filter((i) => can(i.k)) }))
+    .filter((sec) => sec.items.length);
 
   // Opening a rate card forces the matching ecosystem, as the original does.
   useEffect(() => {
@@ -96,7 +107,9 @@ export default function App() {
     if (loc.pathname === "/rep" && eco !== "rep") setEco("rep");
   }, [loc.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const initials = me.split("@")[0].split(".").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
+  const label = me?.name || me?.email || "";
+  const initials = label.split("@")[0].split(/[.\s]/).filter(Boolean)
+    .map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const ThemeIcon = theme === "dark" ? Moon : Sun;
   const themeTitle = `Theme: ${theme} — click to switch`;
 
@@ -149,32 +162,41 @@ export default function App() {
 
         <div className="railfoot">
           <div className="avatar">{initials}</div>
-          <div className="em">{me}</div>
+          <div className="em">
+            <div className="who">{me?.name || me?.email}</div>
+            <div className="role">{me?.role?.replace(/_/g, " ")}</div>
+          </div>
+          <button className="itool" onClick={signOut} title="Sign out"><LogOut size={15} strokeWidth={1.9} /></button>
         </div>
       </aside>
 
       <main>
+        {/* Every route is wrapped: a page the role cannot reach is refused even
+            if the URL is typed directly, not merely hidden from the sidebar. */}
         <Routes>
-          <Route path="/" element={<Navigate to="/pipeline" replace />} />
-          <Route path="/pipeline" element={<Pipeline />} />
+          <Route path="/" element={<Navigate to={"/" + (allowed[0] || "pipeline")} replace />} />
+          <Route path="/pipeline" element={<Guard k="pipeline"><Pipeline /></Guard>} />
           {/* key={eco} remounts on the rail toggle so page/selection state cannot
               leak from a dealer view into a rep view. */}
-          <Route path="/pending"  element={<Lines key={eco} tab="pending_approval" title="Pending Approval" eyebrow={ECO_LABEL[eco]} />} />
-          <Route path="/ready"    element={<Lines key={eco} tab="ready_to_pay"     title="Ready to Pay"     eyebrow={ECO_LABEL[eco]} />} />
-          <Route path="/paid"     element={<Lines key={eco} tab="payment_records"  title="Payment Records"  eyebrow={ECO_LABEL[eco]} />} />
-          <Route path="/hold"     element={<Lines key={eco} tab="on_hold"          title="On Hold"          eyebrow={ECO_LABEL[eco]} />} />
-          <Route path="/stmt"     element={<Statements />} />
+          <Route path="/pending"  element={<Guard k="pending"><Lines key={eco} tab="pending_approval" title="Pending Approval" eyebrow={ECO_LABEL[eco]} /></Guard>} />
+          <Route path="/ready"    element={<Guard k="ready"><Lines key={eco} tab="ready_to_pay" title="Ready to Pay" eyebrow={ECO_LABEL[eco]} /></Guard>} />
+          <Route path="/paid"     element={<Guard k="paid"><Lines key={eco} tab="payment_records" title="Payment Records" eyebrow={ECO_LABEL[eco]} /></Guard>} />
+          <Route path="/hold"     element={<Guard k="hold"><Lines key={eco} tab="on_hold" title="On Hold" eyebrow={ECO_LABEL[eco]} /></Guard>} />
+          <Route path="/stmt"     element={<Guard k="stmt"><Statements /></Guard>} />
           {/* One party's lines. key remounts per party so paging resets. */}
-          <Route path="/stmt/:party" element={<StatementDetail key={eco} />} />
-          <Route path="/exposure" element={<Exposure />} />
-          <Route path="/advances" element={<Advances />} />
-          <Route path="/dealer"   element={<Settings group="DEALER" />} />
-          <Route path="/rep"      element={<Settings group="REP" />} />
-          <Route path="/logic"    element={<Logic />} />
-          <Route path="/push"     element={<Pushes />} />
-          <Route path="/review"   element={<Review />} />
-          <Route path="/tickets"  element={<Tickets />} />
-          <Route path="/access"   element={<Access />} />
+          <Route path="/stmt/:party" element={<Guard k="stmt"><StatementDetail key={eco} /></Guard>} />
+          <Route path="/exposure" element={<Guard k="exposure"><Exposure /></Guard>} />
+          <Route path="/advances" element={<Guard k="advances"><Advances /></Guard>} />
+          <Route path="/dealer"   element={<Guard k="dealer"><Settings group="DEALER" /></Guard>} />
+          <Route path="/rep"      element={<Guard k="rep"><Settings group="REP" /></Guard>} />
+          <Route path="/logic"    element={<Guard k="logic"><Logic /></Guard>} />
+          <Route path="/push"     element={<Guard k="push"><Pushes /></Guard>} />
+          <Route path="/review"   element={<Guard k="review"><Review /></Guard>} />
+          <Route path="/tickets"  element={<Guard k="tickets"><Tickets /></Guard>} />
+          <Route path="/users"    element={<Guard k="users"><UsersPage /></Guard>} />
+          <Route path="/access"   element={<Guard k="access"><Access /></Guard>} />
+          {/* Unknown URL lands on the first page this role can actually reach. */}
+          <Route path="*" element={<Navigate to={"/" + (allowed[0] || "pipeline")} replace />} />
         </Routes>
       </main>
 
@@ -182,6 +204,48 @@ export default function App() {
       <AskAI />
     </div>
     </NavCtx.Provider>
+  );
+}
+
+/**
+ * The gate. Signed out, the only thing that renders is the login screen — the
+ * shell, its data fetches and the rail never mount, so nothing about the
+ * business is on screen before someone identifies themselves.
+ */
+export default function App() {
+  const { me } = useAuth();
+  return me ? <AppShell /> : <Login />;
+}
+
+/**
+ * Refuses a page the role cannot reach, rather than trusting the hidden
+ * sidebar link. Someone who bookmarks a URL, or whose role changes while they
+ * are on the page, has to be turned away here.
+ */
+function Guard({ k, children }) {
+  const { can, allowed } = useAuth();
+  if (can(k)) return children;
+  return (
+    <>
+      <PageHead eyebrow="Admin" title="No access" />
+      <div className="pagebody">
+        <div className="card">
+          <div className="card-b">
+            <div className="errstate">
+              <div className="errstate-h">You do not have access to this page.</div>
+              <div className="errstate-m">
+                Your role does not include it. An administrator can grant it in Access Control.
+              </div>
+              {allowed.length > 0 && (
+                <a className="btn sm pri" href={"#/" + allowed[0]} style={{ marginTop: 12 }}>
+                  Go to {PAGE_LABEL[allowed[0]] || allowed[0]}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
