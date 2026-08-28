@@ -442,8 +442,30 @@ input::placeholder{color:var(--ink-3);opacity:.8}
     radial-gradient(620px 460px at 10% 90%, rgba(3,107,150,.14), transparent 70%),
     radial-gradient(560px 400px at 90% 8%, rgba(156,203,59,.10), transparent 70%)}
 }
-/* The card sits above the decoration. */
-.logincard{position:relative;z-index:1}
+/* Floating glyphs — three parallax layers. Blur + size + speed differences do
+   the 3D work; opacity stays low so the card owns the screen. Colours split
+   between the two brand hues. */
+.fxwrap{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.fx{position:absolute;bottom:-8%;font-family:var(--mono);font-weight:700;line-height:1;
+  opacity:0;animation:fxrise linear infinite;will-change:transform,opacity}
+.fx-near{color:var(--pri)}
+.fx-mid{color:#7da93c;filter:blur(0.5px)}
+.fx-far{color:var(--pri);filter:blur(1.6px)}
+@keyframes fxrise{
+  0%{transform:translateY(0) rotate(-8deg);opacity:0}
+  12%{opacity:.13}
+  55%{transform:translateY(-58vh) rotate(6deg);opacity:.1}
+  88%{opacity:.05}
+  100%{transform:translateY(-112vh) rotate(-4deg);opacity:0}
+}
+
+/* The card sits above the decoration, hovering slightly — the one piece of
+   motion in the foreground, slow enough to feel like depth, not distraction. */
+.logincard{position:relative;z-index:1;animation:cardfloat 7s ease-in-out infinite alternate}
+@keyframes cardfloat{
+  from{transform:perspective(900px) translateY(0) rotateX(0.4deg)}
+  to{transform:perspective(900px) translateY(-6px) rotateX(-0.4deg)}
+}
 .logincard{width:100%;max-width:392px;background:var(--panel);border:1px solid var(--line);
   border-radius:16px;box-shadow:var(--shadow-lg);padding:30px 30px 24px}
 /* The identity block is centred; the form below stays left-aligned, because a

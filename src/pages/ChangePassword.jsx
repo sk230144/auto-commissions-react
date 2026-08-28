@@ -3,6 +3,7 @@ import { KeyRound, LogOut } from "lucide-react";
 import { useAuth } from "../lib/auth.jsx";
 import * as api from "../lib/api.js";
 import { Logo } from "../components/Logo.jsx";
+import LoginBackdrop from "../components/LoginBackdrop.jsx";
 
 /**
  * Forced when `must_change_password` is set — a fresh onboard, or an admin
@@ -38,6 +39,7 @@ export default function ChangePassword() {
 
   return (
     <div className="loginwrap">
+      <LoginBackdrop />
       <form className="logincard" onSubmit={submit}>
         <div className="loginbrand"><Logo height={30} /></div>
         <h1>Choose a password</h1>

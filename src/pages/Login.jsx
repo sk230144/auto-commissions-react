@@ -2,6 +2,7 @@ import { useState } from "react";
 import { LogIn, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../lib/auth.jsx";
 import { Logo } from "../components/Logo.jsx";
+import LoginBackdrop from "../components/LoginBackdrop.jsx";
 
 const REMEMBER_KEY = "ac.remember";
 /**
@@ -57,6 +58,7 @@ export default function Login() {
 
   return (
     <div className="loginwrap">
+      <LoginBackdrop />
       <form className="logincard" onSubmit={submit}>
         <div className="loginbrand"><Logo height={30} /></div>
         <h1>Auto Commissions</h1>
