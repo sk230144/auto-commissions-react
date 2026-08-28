@@ -28,6 +28,7 @@ import Tickets from "./pages/Tickets.jsx";
 import Access from "./pages/Access.jsx";
 import UsersPage from "./pages/Users.jsx";
 import Login from "./pages/Login.jsx";
+import ChangePassword from "./pages/ChangePassword.jsx";
 
 const ECO_LABEL = { dealer: "Dealer Pay", rep: "Sales Rep Pay" };
 const ECO_SHORT = { dealer: "Dealer", rep: "Sales Reps" };
@@ -213,8 +214,18 @@ function AppShell() {
  * business is on screen before someone identifies themselves.
  */
 export default function App() {
-  const { me } = useAuth();
-  return me ? <AppShell /> : <Login />;
+  const { me, booting, mustChangePassword } = useAuth();
+
+  // A stored token is being checked. Showing the login screen here would flash
+  // it at someone who is already signed in.
+  if (booting) {
+    return <div className="loginwrap"><div className="bootspin" aria-label="Loading" /></div>;
+  }
+  if (!me) return <Login />;
+  // A temporary password is known to whoever issued it, so nothing else
+  // renders until it has been replaced.
+  if (mustChangePassword) return <ChangePassword />;
+  return <AppShell />;
 }
 
 /**

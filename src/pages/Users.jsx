@@ -1,182 +1,191 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Search, UserPlus, KeyRound } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { csvDownload, trunc } from "../lib/fmt.js";
-import { useAuth, ROLES, ROLE_LABEL, ROLE_BLURB, ROLE_PAGES, PAGE_LABEL, PAGE_KEYS } from "../lib/auth.jsx";
-import { Badge, Empty, Modal, Confirm, Tip } from "../components/ui.jsx";
+import { csvDownload } from "../lib/fmt.js";
+import { useApi, useDebounced } from "../lib/useApi.js";
+import * as api from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
+import { Badge, Async, TableSkeleton, Pager, Modal, Confirm, Tip } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 
-const ROLE_TONE = { super_admin: "ok", admin: "blue", ops: "mut", approver: "warn", auditor: "mut" };
+const LIMIT = 25;
+const ROLE_TONE = { super_admin: "ok", admin: "blue", operations: "mut", approver: "warn", auditor: "mut" };
 
 /**
- * User Management — who exists, what role they hold, and whether they can sign
- * in. Roles are the unit of permission; which pages a role reaches is set once
- * in Access Control rather than per person, so two people with the same job
- * cannot silently end up with different access.
+ * User Management — who exists, what role they hold, whether they can sign in.
+ *
+ * Roles are the unit of permission: which pages a role reaches is set once in
+ * Access Control, not per person, so two people doing the same job cannot
+ * silently drift apart.
  */
 export default function Users() {
   const { say } = useStore();
-  const { me, users, setUsers, grants } = useAuth();
+  const { canWrite, refresh } = useAuth();
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
+  const [offset, setOffset] = useState(0);
   const [form, setForm] = useState(null);
-  const [confirm, setConfirm] = useState(null);
   const [pwFor, setPwFor] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const rows = useMemo(() => users.filter((u) => {
-    if (role && u.role !== role) return false;
-    if (!q.trim()) return true;
-    const s = q.toLowerCase();
-    return [u.email, u.name, u.role].join(" ").toLowerCase().includes(s);
-  }), [users, q, role]);
+  const search = useDebounced(q, 350);
+  const mayWrite = canWrite("users");
 
-  const counts = useMemo(() => {
-    const c = {};
-    users.forEach((u) => { c[u.role] = (c[u.role] || 0) + 1; });
-    return c;
-  }, [users]);
+  const listQ = useApi(
+    (signal) => api.usersList({ role, search, limit: LIMIT, offset }, { signal }),
+    [role, search, offset]
+  );
 
-  const isSelf = (u) => u.email.toLowerCase() === me?.email.toLowerCase();
-  const admins = users.filter((u) => u.role === "super_admin" && u.status !== "suspended");
-  /** Guards the last way back in: never remove or demote the final super admin. */
-  const isLastAdmin = (u) => u.role === "super_admin" && admins.length <= 1;
+  // Roles come from the access matrix, so this screen never hardcodes the set.
+  const matrixQ = useApi((signal) => api.accessMatrix({ signal }), []);
+  const roles = matrixQ.data?.roles || [];
+  const roleName = (k) => roles.find((r) => r.key === k)?.name || k;
+  const roleBlurb = (k) => roles.find((r) => r.key === k)?.description || "";
 
-  function save(row, mode) {
-    const email = row.email.trim().toLowerCase();
-    if (mode === "create" && users.some((u) => u.email.toLowerCase() === email)) {
-      return say("That email already has an account", true);
+  const d = listQ.data;
+  const rows = d?.users || [];
+  const total = d?.total ?? 0;
+  // Whole-table counts — they do not shrink as the list is filtered.
+  const byRole = d?.by_role || {};
+
+  const reset = (fn) => (v) => { fn(v); setOffset(0); };
+
+  async function act(fn, okMsg) {
+    setBusy(true);
+    try {
+      await fn();
+      say(okMsg);
+      listQ.reload();
+      // A role or status change can affect the signed-in user's own access.
+      refresh();
+    } catch (e) {
+      say(e.message, true);
+    } finally {
+      setBusy(false);
     }
-    setUsers((list) => mode === "create"
-      ? [{ ...row, email, status: "active" }, ...list]
-      : list.map((u) => u.email.toLowerCase() === email ? { ...u, ...row, email } : u));
-    setForm(null);
-    say(mode === "create" ? `${email} onboarded as ${ROLE_LABEL[row.role]}` : "User updated");
-  }
-
-  function setStatus(u, status) {
-    setUsers((list) => list.map((x) => x.email === u.email ? { ...x, status } : x));
-    say(status === "active" ? "Access restored" : "Access suspended");
-  }
-
-  function remove(u) {
-    setUsers((list) => list.filter((x) => x.email !== u.email));
-    setConfirm(null);
-    say("Removed");
   }
 
   function exportCsv() {
-    const header = ["Email", "Name", "Role", "Status", "Pages"];
-    const body = rows.map((u) => [u.email, u.name || "", u.role, u.status || "active",
-      u.role === "super_admin" ? PAGE_KEYS.length : (grants[u.role] || []).length]);
+    const header = ["Email", "Name", "Role", "Status", "Pages", "Created by", "Created", "Last login"];
+    const body = rows.map((u) => [u.email, u.name || "", u.role_name, u.status,
+      u.page_count === -1 ? "all" : u.page_count, u.created_by || "", u.created_at || "", u.last_login || ""]);
     csvDownload("users", header, body) ? say("Exported") : say("Nothing to export", true);
   }
 
   return (
     <>
       <PageHead eyebrow="Admin" title="User Management"
-        count={`${users.length} user${users.length === 1 ? "" : "s"}`}>
+        count={listQ.loading ? "loading…" : listQ.error ? "—"
+          : `${total.toLocaleString()} user${total === 1 ? "" : "s"}`}>
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>Export CSV</button>
-        <button className="btn pri" onClick={() => setForm({
-          mode: "create", email: "", name: "", role: "ops", password: "",
-        })}>
-          <UserPlus size={14} strokeWidth={2} />Onboard a user
-        </button>
+        {mayWrite && (
+          <button className="btn pri" onClick={() => setForm({
+            mode: "create", email: "", name: "", temp_password: "", role: "operations",
+          })}>
+            <UserPlus size={14} strokeWidth={2} />Onboard a user
+          </button>
+        )}
       </PageHead>
 
       <div className="pagebody">
         <div className="sub">
           Everyone who can sign in. <b>Role decides what they see</b> — the page-by-page grants
-          live in Access Control, so changing a role changes access everywhere at once.
-          Suspending keeps the account and its history but blocks sign-in.
+          live in Access Control, so changing a role changes access everywhere at once, and
+          applies to the person's current session immediately. Accounts are <b>suspended, never
+          deleted</b>, so past work keeps its author.
         </div>
 
         <div className="card">
           <div className="card-h">
             <div className="seg">
-              <button className={role === "" ? "on" : ""} onClick={() => setRole("")}>
-                All<span className="segn">{users.length}</span>
+              <button className={role === "" ? "on" : ""} onClick={() => reset(setRole)("")}>
+                All<span className="segn">{Object.values(byRole).reduce((a, b) => a + b, 0) || total}</span>
               </button>
-              {ROLES.filter((r) => counts[r]).map((r) => (
-                <button key={r} className={role === r ? "on" : ""} onClick={() => setRole(r)}>
-                  {ROLE_LABEL[r]}<span className="segn">{counts[r]}</span>
+              {roles.filter((r) => byRole[r.key]).map((r) => (
+                <button key={r.key} className={role === r.key ? "on" : ""} onClick={() => reset(setRole)(r.key)}>
+                  {r.name}<span className="segn">{byRole[r.key]}</span>
                 </button>
               ))}
             </div>
             <div className="sp" />
             <div className="search" style={{ width: 220 }}>
               <span className="mag"><Search size={14} strokeWidth={2} /></span>
-              <input placeholder="Email, name, role…" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input placeholder="Name or email…" value={q} onChange={(e) => reset(setQ)(e.target.value)} />
             </div>
           </div>
 
           <div className="card-b flush">
-            {rows.length === 0 ? (
-              <Empty>{q || role ? "No users match." : "No users yet."}</Empty>
-            ) : (
-              <div className="tblwrap">
+            <Async q={listQ} what="users" isEmpty={!rows.length}
+              skeleton={<TableSkeleton cols={5} />}
+              empty={search || role ? "No users match." : "No users yet."}>
+              <div className={"tblwrap" + (listQ.refreshing || busy ? " refreshing" : "")}>
                 <table>
                   <thead>
-                    <tr><th>User</th><th>Role</th><th className="r">Pages</th><th>Status</th><th /></tr>
+                    <tr><th>User</th><th>Role</th><th className="r">Pages</th><th>Status</th>
+                      <th>Last login</th><th /></tr>
                   </thead>
                   <tbody>
                     {rows.map((u) => {
-                      const pages = u.role === "super_admin" ? PAGE_KEYS : (grants[u.role] || []);
                       const suspended = u.status === "suspended";
                       return (
-                        <tr key={u.email}>
+                        <tr key={u.id}>
                           <td>
                             <b>{u.name || u.email.split("@")[0]}</b>
-                            {isSelf(u) && <> <Badge kind="blue">you</Badge></>}
+                            {u.you && <> <Badge kind="blue">you</Badge></>}
                             <div className="submeta">{u.email}</div>
                           </td>
                           <td>
-                            <Tip text={ROLE_BLURB[u.role]}>
-                              <Badge kind={ROLE_TONE[u.role] || "mut"}>{ROLE_LABEL[u.role] || u.role}</Badge>
+                            <Tip text={roleBlurb(u.role)}>
+                              <Badge kind={ROLE_TONE[u.role] || "mut"}>{u.role_name}</Badge>
                             </Tip>
                           </td>
                           <td className="r num">
-                            {u.role === "super_admin"
-                              ? <Tip text="A super admin always sees every page — that is deliberate, so a configuration slip cannot lock out the last administrator.">
-                                  all
-                                </Tip>
-                              : pages.length}
+                            {/* -1 means every page — the super admin is locked open. */}
+                            {u.page_count === -1
+                              ? <Tip text="A super admin always holds every permission — that is deliberate, so a configuration slip cannot lock out the last administrator.">all</Tip>
+                              : u.page_count}
                           </td>
                           <td>
                             <Badge kind={suspended ? "bad" : "ok"}>
                               <span className="pip" />{suspended ? "suspended" : "active"}
                             </Badge>
                           </td>
+                          <td>
+                            {u.last_login || <span className="gap">never</span>}
+                            {u.created_by && <div className="submeta">added by {u.created_by.split("@")[0]}</div>}
+                          </td>
                           <td className="r">
-                            <div className="row" style={{ justifyContent: "flex-end", flexWrap: "nowrap", gap: 6 }}>
-                              <button className="btn sm" onClick={() => setForm({
-                                mode: "edit", email: u.email, name: u.name || "", role: u.role, password: "",
-                              })}>Edit</button>
-                              <button className="btn sm" onClick={() => setPwFor(u)}>
-                                <KeyRound size={12} strokeWidth={2} />Password
-                              </button>
-                              {/* The last super admin cannot be suspended or removed —
-                                  that is the only way back into Access Control. */}
-                              {isLastAdmin(u) ? (
-                                <Tip text="The last super admin cannot be suspended or removed — it is the only way back into Access Control.">
-                                  <button className="btn sm" disabled>Locked</button>
-                                </Tip>
-                              ) : (
-                                <>
-                                  <button className="btn sm" onClick={() => setStatus(u, suspended ? "active" : "suspended")}>
-                                    {suspended ? "Restore" : "Suspend"}
+                            {mayWrite && (
+                              <div className="row" style={{ justifyContent: "flex-end", flexWrap: "nowrap", gap: 6 }}>
+                                <button className="btn sm" disabled={busy} onClick={() => setForm({
+                                  mode: "edit", id: u.id, email: u.email, name: u.name || "", role: u.role,
+                                })}>Edit</button>
+                                <button className="btn sm" disabled={busy} onClick={() => setPwFor(u)}>
+                                  <KeyRound size={12} strokeWidth={2} />Password
+                                </button>
+                                {/* Refused server-side too; disabling it just avoids
+                                    offering an action that cannot succeed. */}
+                                {u.you ? (
+                                  <Tip text="You cannot suspend your own account.">
+                                    <button className="btn sm" disabled>Suspend</button>
+                                  </Tip>
+                                ) : suspended ? (
+                                  <button className="btn sm" disabled={busy}
+                                    onClick={() => act(() => api.userActivate(u.id), "Access restored")}>
+                                    Restore
                                   </button>
-                                  <button className="btn sm danger" onClick={() => setConfirm({
-                                    title: "Remove this user?",
-                                    body: <>Remove <b>{u.email}</b>? They lose access immediately.
-                                      {isSelf(u) && <div style={{ marginTop: 8, color: "var(--held)" }}>
-                                        This is your own account — you will be signed out.
-                                      </div>}</>,
-                                    confirmLabel: "Remove", danger: true,
-                                    onYes: () => remove(u),
-                                  })}>Remove</button>
-                                </>
-                              )}
-                            </div>
+                                ) : (
+                                  <button className="btn sm danger" disabled={busy} onClick={() => setConfirm({
+                                    title: "Suspend this account?",
+                                    body: <>Suspend <b>{u.email}</b>? They are signed out on their next request,
+                                      and the account is kept so their past work keeps its author.</>,
+                                    confirmLabel: "Suspend", danger: true,
+                                    onYes: () => { setConfirm(null); act(() => api.userSuspend(u.id), "Access suspended"); },
+                                  })}>Suspend</button>
+                                )}
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
@@ -184,54 +193,62 @@ export default function Users() {
                   </tbody>
                 </table>
               </div>
-            )}
+              <Pager total={total} limit={LIMIT} offset={offset} onOffset={setOffset} busy={listQ.refreshing} />
+            </Async>
           </div>
         </div>
       </div>
 
-      {form && <UserDialog form={form} setForm={setForm} onSave={save} grants={grants} />}
-      {pwFor && <PasswordDialog user={pwFor} onCancel={() => setPwFor(null)}
-        onOk={(pw) => {
-          setUsers((list) => list.map((x) => x.email === pwFor.email ? { ...x, password: pw } : x));
-          setPwFor(null); say("Password set");
-        }} />}
+      {form && (
+        <UserDialog form={form} setForm={setForm} roles={roles} busy={busy}
+          roleName={roleName} roleBlurb={roleBlurb}
+          onSave={(body) => act(
+            () => form.mode === "create" ? api.userOnboard(body) : api.userEdit(body),
+            form.mode === "create" ? `${body.email} onboarded as ${roleName(body.role)}` : "User updated"
+          ).then(() => setForm(null))} />
+      )}
+
+      {pwFor && (
+        <PasswordDialog user={pwFor} busy={busy} onCancel={() => setPwFor(null)}
+          onOk={(pw) => {
+            const u = pwFor; setPwFor(null);
+            act(() => api.userSetPassword(u.id, pw),
+              u.you ? "Password changed" : "Password reset — they must choose a new one at next sign-in");
+          }} />
+      )}
+
       {confirm && <Confirm {...confirm} onNo={() => setConfirm(null)} />}
     </>
   );
 }
 
-/**
- * Onboarding and editing share one dialog. Picking a role previews exactly
- * which pages that person will get, so the consequence of the choice is
- * visible before it is made rather than discovered later.
- */
-function UserDialog({ form, setForm, onSave, grants }) {
+/** Onboarding and editing share one dialog; the role list comes from the API. */
+function UserDialog({ form, setForm, roles, onSave, roleBlurb, busy }) {
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const creating = form.mode === "create";
-  const pages = form.role === "super_admin" ? PAGE_KEYS : (grants[form.role] || ROLE_PAGES[form.role] || []);
-
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
-  const pwOk = !creating || form.password.length >= 4;
+  const pwOk = !creating || form.temp_password.length >= 4;
   const ok = emailOk && pwOk;
 
+  const chosen = roles.find((r) => r.key === form.role);
+
   return (
-    <Modal wide title={creating ? "Onboard a user" : `Edit ${form.email}`}
+    <Modal title={creating ? "Onboard a user" : `Edit ${form.email}`}
       why={creating
-        ? "Creates an account that can sign in immediately. Role decides what they see."
-        : "Changing the role changes what this person can reach, everywhere at once."}
+        ? "They sign in with the temporary password, then must choose their own before reaching the app."
+        : "A role change applies to their current session immediately — no sign-out needed."}
       onClose={() => setForm(null)}
       footer={<>
         {!ok && (
           <span className="submeta" style={{ color: "var(--held)", marginRight: "auto" }}>
-            {!emailOk ? "A valid email is required." : "Password must be at least 4 characters."}
+            {!emailOk ? "A valid email is required." : "The temporary password needs at least 4 characters."}
           </span>
         )}
         <button className="btn" onClick={() => setForm(null)}>Cancel</button>
-        <button className="btn pri" disabled={!ok}
-          onClick={() => onSave({
-            email: form.email, name: form.name.trim(), role: form.role,
-            ...(form.password ? { password: form.password } : {}),
-          }, form.mode)}>
+        <button className="btn pri" disabled={!ok || busy}
+          onClick={() => onSave(creating
+            ? { email: form.email.trim(), name: form.name.trim(), temp_password: form.temp_password, role: form.role }
+            : { id: form.id, name: form.name.trim(), role: form.role })}>
           {creating ? "Onboard" : "Save"}
         </button>
       </>}>
@@ -240,7 +257,8 @@ function UserDialog({ form, setForm, onSave, grants }) {
           <label className="f">Email *</label>
           <input autoFocus={creating} type="email" value={form.email} disabled={!creating}
             placeholder="name@ourworldenergy.com" onChange={set("email")} />
-          {!creating && <div className="submeta">The email is the identity — it cannot be changed.</div>}
+          {/* Deliberate server-side: history stays attached to the address. */}
+          {!creating && <div className="submeta">The email is the identity and cannot be changed. To correct one, suspend this account and onboard the right address.</div>}
         </div>
         <div>
           <label className="f">Name</label>
@@ -249,46 +267,46 @@ function UserDialog({ form, setForm, onSave, grants }) {
         {creating && (
           <div>
             <label className="f">Temporary password *</label>
-            <input value={form.password} onChange={set("password")} placeholder="At least 4 characters" />
+            <input value={form.temp_password} onChange={set("temp_password")} placeholder="At least 4 characters" />
+            <div className="submeta">They are forced to replace it at first sign-in.</div>
           </div>
         )}
+        <div>
+          <label className="f">Role *</label>
+          <select value={form.role} onChange={set("role")}>
+            {roles.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}
+          </select>
+        </div>
       </div>
 
-      <div className="sect">Role</div>
-      <select value={form.role} onChange={set("role")} style={{ maxWidth: 300 }}>
-        {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-      </select>
-      {/* What the selected role means, since a dropdown shows only its name. */}
-      <div className="submeta" style={{ marginTop: 6 }}>{ROLE_BLURB[form.role]}</div>
-
-      {/* The consequence of the role choice, shown before it is committed. */}
-      <div className="sect">This role can reach {form.role === "super_admin" ? "every page" : `${pages.length} pages`}</div>
-      <div className="pagechips">
-        {(form.role === "super_admin" ? PAGE_KEYS : pages).map((k) => (
-          <span key={k} className="pagechip">{PAGE_LABEL[k] || k}</span>
-        ))}
-        {pages.length === 0 && form.role !== "super_admin" && (
-          <span className="submeta">No pages granted — this person would sign in and see nothing.</span>
-        )}
-      </div>
+      {chosen && (
+        <div className="submeta" style={{ marginTop: 10 }}>
+          {roleBlurb(form.role)}
+          {" · "}{chosen.page_count === 16 && chosen.is_system ? "every page" : `${chosen.page_count} pages`}
+          {chosen.read_only && " · view only, cannot change anything"}
+        </div>
+      )}
     </Modal>
   );
 }
 
-function PasswordDialog({ user, onOk, onCancel }) {
+function PasswordDialog({ user, onOk, onCancel, busy }) {
   const [pw, setPw] = useState("");
   const ok = pw.length >= 4;
   return (
     <Modal title="Set a password"
-      why="Replaces the existing password immediately. In a real deployment this would send a reset link instead of setting one directly."
+      why={user.you
+        ? "Changing your own password does not sign you out."
+        : "Resetting someone else's password forces them to choose their own at the next sign-in."}
       onClose={onCancel}>
       <div style={{ fontSize: 13, marginBottom: 12, color: "var(--ink-2)" }}>{user.email}</div>
       <label className="f">New password *</label>
-      <input autoFocus value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least 4 characters"
+      <input autoFocus type="password" value={pw} onChange={(e) => setPw(e.target.value)}
+        placeholder="At least 4 characters"
         onKeyDown={(e) => e.key === "Enter" && ok && onOk(pw)} />
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
         <button className="btn" onClick={onCancel}>Cancel</button>
-        <button className="btn pri" disabled={!ok} onClick={() => onOk(pw)}>Set password</button>
+        <button className="btn pri" disabled={!ok || busy} onClick={() => onOk(pw)}>Set password</button>
       </div>
     </Modal>
   );

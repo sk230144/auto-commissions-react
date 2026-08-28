@@ -1,143 +1,149 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { ApiError, setAuthToken, setOnUnauthorized, authLogin, authMe } from "./api.js";
 
 /**
- * Identity and permissions.
+ * Identity and permissions, served by the API.
  *
- * This is a FRONT-END STAND-IN. There is no auth API yet, so the credential
- * check and the user list live in the browser and persist to localStorage.
- * That means it is a UI shell for a real system, not a security boundary:
- * anyone can read the seed credential in the bundle or edit localStorage.
- * Nothing here should be relied on to protect money until the backend exists.
+ * The backend enforces access on every request; this only mirrors it so the UI
+ * knows what to render. Hiding a nav item is a courtesy — the API is the lock,
+ * and a route the role cannot reach is refused there whatever the client does.
  *
- * It is shaped so that swap is small — `signIn` becomes one POST, `users`
- * becomes one GET, and every component that reads `can()` stays unchanged.
+ * Permissions are read from the database per request, so a grant, revoke, role
+ * change or suspension applies immediately. That is why a 403 refreshes the
+ * session rather than assuming our copy is right.
  */
 
-const SESSION_KEY = "ac.session";
-const USERS_KEY = "ac.users";
+const TOKEN_KEY = "ac.token";
 
-/** Every routable page, with the label the nav uses. The permission matrix and
- *  the router are driven from this one list so they cannot drift apart. */
+/** The 16 page permissions, grouped for the sidebar and the access matrix. */
 export const PAGES = [
-  { key: "pipeline", label: "Pipeline Overview", group: "Payments" },
-  { key: "pending", label: "Pending Approval", group: "Payments" },
-  { key: "ready", label: "Ready to Pay", group: "Payments" },
-  { key: "stmt", label: "Pay Statements", group: "Payments" },
-  { key: "exposure", label: "Exposure", group: "Payments" },
-  { key: "paid", label: "Payment Records", group: "Payments" },
-  { key: "hold", label: "On Hold", group: "Payments" },
-  { key: "advances", label: "Advances", group: "Payments" },
-  { key: "dealer", label: "Dealer Rates", group: "Rate cards" },
-  { key: "rep", label: "Sales Rep Rates", group: "Rate cards" },
-  { key: "logic", label: "Payout Logic", group: "Rate cards" },
-  { key: "push", label: "Manual Payments", group: "Operations" },
-  { key: "review", label: "Open Items", group: "Operations" },
-  { key: "tickets", label: "Tickets", group: "Operations" },
-  { key: "users", label: "User Management", group: "Admin" },
-  { key: "access", label: "Access Control", group: "Admin" },
+  { key: "pipeline_overview", route: "pipeline", label: "Pipeline Overview", group: "Payments" },
+  { key: "pending_approval", route: "pending", label: "Pending Approval", group: "Payments" },
+  { key: "ready_to_pay", route: "ready", label: "Ready to Pay", group: "Payments" },
+  { key: "pay_statements", route: "stmt", label: "Pay Statements", group: "Payments" },
+  { key: "exposure", route: "exposure", label: "Exposure", group: "Payments" },
+  { key: "payment_records", route: "paid", label: "Payment Records", group: "Payments" },
+  { key: "on_hold", route: "hold", label: "On Hold", group: "Payments" },
+  { key: "advances", route: "advances", label: "Advances", group: "Payments" },
+  { key: "dealer_rates", route: "dealer", label: "Dealer Rates", group: "Rate cards" },
+  { key: "sales_rep_rates", route: "rep", label: "Sales Rep Rates", group: "Rate cards" },
+  { key: "payout_logic", route: "logic", label: "Payout Logic", group: "Rate cards" },
+  { key: "manual_payments", route: "push", label: "Manual Payments", group: "Operations" },
+  { key: "open_items", route: "review", label: "Open Items", group: "Operations" },
+  { key: "tickets", route: "tickets", label: "Tickets", group: "Operations" },
+  { key: "user_management", route: "users", label: "User Management", group: "Admin" },
+  { key: "access_control", route: "access", label: "Access Control", group: "Admin" },
 ];
 
-export const PAGE_KEYS = PAGES.map((p) => p.key);
-export const PAGE_LABEL = Object.fromEntries(PAGES.map((p) => [p.key, p.label]));
-
-export const ROLES = ["super_admin", "admin", "ops", "approver", "auditor"];
-export const ROLE_LABEL = {
-  super_admin: "Super admin", admin: "Admin", ops: "Operations",
-  approver: "Approver", auditor: "Auditor",
-};
-export const ROLE_BLURB = {
-  super_admin: "Everything, including access control. Cannot be locked out.",
-  admin: "Everything except access control.",
-  ops: "Day-to-day payment work. No rate cards.",
-  approver: "Approves advances and manual payments only.",
-  auditor: "Read-only across the money and the rate cards.",
-};
-
-/**
- * Default pages per role. super_admin is deliberately not listed — it is
- * granted everything unconditionally below, so a bad edit here can never lock
- * the last administrator out of Access Control.
- */
-export const ROLE_PAGES = {
-  admin: PAGE_KEYS.filter((k) => k !== "access"),
-  ops: ["pipeline", "pending", "ready", "stmt", "exposure", "paid", "hold", "advances", "logic", "push", "review", "tickets"],
-  approver: ["advances", "push", "tickets"],
-  auditor: ["pipeline", "pending", "ready", "stmt", "exposure", "paid", "hold", "dealer", "rep", "logic", "tickets"],
-};
-
-/** The seed account, until the backend exists. */
-const SEED_USERS = [
-  { email: "admin@gmail.com", password: "1234", name: "Admin", role: "super_admin", status: "active" },
-];
-
-const read = (k, fallback) => {
-  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; }
-  catch { return fallback; }
-};
-const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
+/** URL path ↔ permission key. The router speaks routes, the API speaks keys. */
+export const ROUTE_TO_PERM = Object.fromEntries(PAGES.map((p) => [p.route, p.key]));
+export const PERM_TO_ROUTE = Object.fromEntries(PAGES.map((p) => [p.key, p.route]));
+export const PAGE_LABEL = Object.fromEntries(PAGES.map((p) => [p.route, p.label]));
 
 const AuthCtx = createContext(null);
 
 export function AuthProvider({ children }) {
-  // A browser that used an earlier build still holds users and grants for
-  // roles that no longer exist. Reconcile on load rather than leaving someone
-  // signed in with a role nothing grants — which reads as "no pages" and looks
-  // like the app is broken.
-  const [users, setUsers] = useState(() =>
-    read(USERS_KEY, SEED_USERS).map((u) => ROLES.includes(u.role) ? u : { ...u, role: "ops" }));
-  const [session, setSession] = useState(() => read(SESSION_KEY, null));
-  // Per-role page grants, overridable from Access Control. Keys for removed
-  // roles are dropped; a role added since is seeded from its default.
-  const [grants, setGrants] = useState(() => {
-    const saved = read("ac.grants", {});
-    return Object.fromEntries(
-      ROLES.filter((r) => r !== "super_admin")
-        .map((r) => [r, saved[r] ?? ROLE_PAGES[r] ?? []])
-    );
-  });
+  const [me, setMe] = useState(null);
+  // Until the stored token is checked we know nothing — rendering the login
+  // screen during that gap would flash it at an already-signed-in user.
+  const [booting, setBooting] = useState(() => !!localStorage.getItem(TOKEN_KEY));
+  const [authError, setAuthError] = useState("");
 
-  useEffect(() => { write(USERS_KEY, users); }, [users]);
-  useEffect(() => { write("ac.grants", grants); }, [grants]);
+  /** Rebuild the session from a stored token (F5), or drop it if it is dead. */
+  const refresh = useCallback(async () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) { setMe(null); setBooting(false); return null; }
+    setAuthToken(token);
+    try {
+      const user = await authMe();
+      setMe(user);
+      return user;
+    } catch (e) {
+      // 401 means the token expired or the account was suspended. Anything
+      // else (the server being down) must NOT sign the user out.
+      if (e instanceof ApiError && e.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        setAuthToken(null);
+        setMe(null);
+      }
+      return null;
+    } finally {
+      setBooting(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  /**
+   * A 401 anywhere in the app ends the session — the token is dead or the
+   * account was suspended, and every subsequent call would fail the same way.
+   * A 403 is different: the session is fine but access changed underneath us,
+   * so re-read it rather than logging anyone out.
+   */
   useEffect(() => {
-    if (session) write(SESSION_KEY, session);
-    else { try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ } }
-  }, [session]);
+    setOnUnauthorized((status, message) => {
+      if (status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        setAuthToken(null);
+        setMe(null);
+        setAuthError(message || "Your session has ended. Sign in again.");
+      } else if (status === 403) {
+        refresh();
+      }
+    });
+    return () => setOnUnauthorized(null);
+  }, [refresh]);
 
-  /** Resolves against the in-browser user list. Returns an error string rather
-   *  than throwing, so the form can show it inline. */
-  const signIn = useCallback((email, password) => {
-    const e = String(email || "").trim().toLowerCase();
-    const u = users.find((x) => x.email.toLowerCase() === e);
-    // One message for both cases — saying "no such user" tells an attacker
-    // which addresses are real.
-    if (!u || u.password !== password) return "That email and password do not match.";
-    if (u.status === "suspended") return "This account is suspended. An administrator can restore it.";
-    setSession({ email: u.email, at: new Date().toISOString() });
-    return null;
-  }, [users]);
+  /** Returns an error string rather than throwing, so the form can show it. */
+  const signIn = useCallback(async (email, password) => {
+    try {
+      const data = await authLogin(email.trim(), password);
+      localStorage.setItem(TOKEN_KEY, data.token);
+      setAuthToken(data.token);
+      setAuthError("");
+      // The login response carries the same user object as /auth/me, so the
+      // shell can be built without a second round trip.
+      setMe(data.user);
+      return null;
+    } catch (e) {
+      return e.message || "Could not sign in.";
+    }
+  }, []);
 
-  const signOut = useCallback(() => setSession(null), []);
+  const signOut = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
+    setAuthToken(null);
+    setMe(null);
+    setAuthError("");
+  }, []);
 
-  const me = useMemo(
-    () => (session ? users.find((u) => u.email.toLowerCase() === session.email.toLowerCase()) || null : null),
-    [session, users]
+  const permissions = me?.permissions || [];
+
+  /** The one gate for nav items, routes and buttons. Takes a ROUTE key. */
+  const can = useCallback((route) => {
+    if (!me) return false;
+    if (me.role === "super_admin") return true;
+    const perm = ROUTE_TO_PERM[route] || route;
+    return permissions.includes(perm);
+  }, [me, permissions]);
+
+  /** Read-only roles may open a page but not change it — the API returns 403,
+   *  so the button is hidden rather than offered and then refused. */
+  const canWrite = useCallback((route) => can(route) && !me?.read_only, [can, me]);
+
+  /** Routes this user may reach, in sidebar order. */
+  const allowed = useMemo(
+    () => PAGES.filter((p) => can(p.route)).map((p) => p.route),
+    [can]
   );
 
-  /** Pages this user may see. super_admin bypasses the matrix entirely. */
-  const allowed = useMemo(() => {
-    if (!me) return [];
-    if (me.role === "super_admin") return PAGE_KEYS;
-    return grants[me.role] || [];
-  }, [me, grants]);
-
-  const can = useCallback((page) => allowed.includes(page), [allowed]);
-
   const value = useMemo(() => ({
-    me, session, users, setUsers, grants, setGrants,
-    signIn, signOut, allowed, can,
-    isAdmin: me?.role === "super_admin" || me?.role === "admin",
-    canManageAccess: me?.role === "super_admin",
-  }), [me, session, users, grants, signIn, signOut, allowed, can]);
+    me, booting, authError, setAuthError,
+    signIn, signOut, refresh,
+    can, canWrite, allowed, permissions,
+    readOnly: !!me?.read_only,
+    mustChangePassword: !!me?.must_change_password,
+  }), [me, booting, authError, signIn, signOut, refresh, can, canWrite, allowed, permissions]);
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

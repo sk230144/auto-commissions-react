@@ -14,8 +14,22 @@
 
 const BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 const PREFIX = import.meta.env.VITE_API_PREFIX || "/api/commission/v1";
-const TOKEN = import.meta.env.VITE_API_TOKEN || "";
 const TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT_MS) || 20000;
+
+/**
+ * The session token, held in a module variable rather than read from storage
+ * per request. `auth.jsx` owns its lifecycle; nothing else sets it.
+ */
+let TOKEN = "";
+export const setAuthToken = (t) => { TOKEN = t || ""; };
+
+/**
+ * Called on a 401 or 403 so the session can react — end it, or re-read the
+ * permissions that just changed. Registered by AuthProvider, because the API
+ * layer must not import React state.
+ */
+let onUnauthorized = null;
+export const setOnUnauthorized = (fn) => { onUnauthorized = fn; };
 
 export const USE_DUMMY = String(import.meta.env.VITE_USE_DUMMY_DATA) === "true";
 
@@ -100,6 +114,14 @@ async function request(path, { method = "POST", body, signal } = {}) {
     const msg = res.status >= 500
       ? "The commission API had a problem completing that request."
       : json?.message || `Request failed (${res.status})`;
+
+    // 401 = the session is over (expired token, or the account was suspended).
+    // 403 = the session is fine but this role lacks the page, which usually
+    // means an admin just changed it — so the session is re-read, not ended.
+    // The login call is exempt: its 401 is "wrong password", not a dead session.
+    if ((res.status === 401 || res.status === 403) && onUnauthorized && !path.startsWith("/auth/login")) {
+      onUnauthorized(res.status, msg);
+    }
     throw new ApiError(msg, res.status, json);
   }
   return json?.data ?? json;
@@ -115,6 +137,30 @@ const qs = (params) => {
   const s = p.toString();
   return s ? "?" + s : "";
 };
+
+// ── Session ─────────────────────────────────────────────────────────────────
+export const authLogin = (email, password, opts) => post("/auth/login", { email, password }, opts);
+/** Same user object as login. Called on boot and after any 403, because the
+ *  server reads permissions per request — ours can be stale, theirs cannot. */
+export const authMe = (opts) => get("/auth/me", opts);
+
+// ── User management ─────────────────────────────────────────────────────────
+export const usersList = (body, opts) => post("/users/list", clean(body), opts);
+export const userOnboard = (body, opts) => post("/users/onboard", clean(body), opts);
+export const userEdit = (body, opts) => post("/users/edit", clean(body), opts);
+/** On yourself this clears must_change_password; on someone else it SETS it,
+ *  so an admin reset forces them to choose their own on next sign-in. */
+export const userSetPassword = (id, new_password, opts) => post("/users/set-password", { id, new_password }, opts);
+export const userSuspend = (id, opts) => post("/users/suspend", { id }, opts);
+export const userActivate = (id, opts) => post("/users/activate", { id }, opts);
+
+// ── Access control ──────────────────────────────────────────────────────────
+/** Roles, pages and grants — the whole matrix in one call. */
+export const accessMatrix = (opts) => post("/access/matrix", {}, opts);
+export const accessGrant = (role, page, allowed, opts) => post("/access/grant", { role, page, allowed }, opts);
+/** Replaces a role's entire row atomically — the All / None buttons. */
+export const accessRolePages = (role, pages, opts) => post("/access/role-pages", { role, pages }, opts);
+export const accessRestoreDefaults = (opts) => post("/access/restore-defaults", {}, opts);
 
 // ── Pipeline ────────────────────────────────────────────────────────────────
 export const pipelineProjects = (body, opts) => post("/pipeline/projects", clean(body), opts);
