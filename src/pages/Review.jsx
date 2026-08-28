@@ -373,7 +373,13 @@ function ResolveDialog({ item, onOk, onCancel, busy }) {
   return (
     <Modal wide title="Resolve this item"
       why="The ruling is kept as a permanent journal entry — it explains, later, why this was closed."
-      onClose={onCancel}>
+      onClose={onCancel}
+      footer={<>
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className="btn pri" disabled={!text.trim() || busy} onClick={() => onOk(text.trim())}>
+          Record ruling
+        </button>
+      </>}>
       <div style={{ fontSize: 13.5, marginBottom: 10, lineHeight: 1.55, fontWeight: 550 }}>{item.title}</div>
       {item.amount_cents != null && (
         <div className="submeta" style={{ marginBottom: 14 }}>At stake: <b>{moneyC(item.amount_cents)}</b></div>
@@ -395,12 +401,6 @@ function ResolveDialog({ item, onOk, onCancel, busy }) {
       <label className="f">Ruling *</label>
       <textarea autoFocus rows={4} value={text} onChange={(e) => setText(e.target.value)}
         placeholder="What was decided, and on what basis" />
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={onCancel}>Cancel</button>
-        <button className="btn pri" disabled={!text.trim() || busy} onClick={() => onOk(text.trim())}>
-          Record ruling
-        </button>
-      </div>
     </Modal>
   );
 }

@@ -200,7 +200,10 @@ export function Modal({ title, why, onClose, children, footer, wide }) {
   }, [onClose]);
   return (
     <div className="scrim" onClick={onClose}>
-      <div className={"modal" + (footer ? " modal-split" : "")}
+      {/* Always split: the title stays put and only the body scrolls, so a long
+          form never carries its heading off the top. `footer` pins the actions
+          too — without it they scroll with the fields. */}
+      <div className="modal modal-split"
         style={wide ? { maxWidth: 860 } : undefined} onClick={(e) => e.stopPropagation()}>
         <div className="modal-h">
           <h3>{title}</h3>
@@ -223,12 +226,12 @@ export function Toast() {
  *  one mis-click can approve six figures — so every batch action here has one. */
 export function Confirm({ title, body, confirmLabel = "Confirm", danger, onYes, onNo }) {
   return (
-    <Modal title={title} onClose={onNo}>
-      <div style={{ fontSize: 13.5, marginBottom: 16 }}>{body}</div>
-      <div className="row" style={{ justifyContent: "flex-end" }}>
+    <Modal title={title} onClose={onNo}
+      footer={<>
         <button className="btn" onClick={onNo}>Cancel</button>
         <button className={"btn " + (danger ? "danger" : "pri")} onClick={onYes}>{confirmLabel}</button>
-      </div>
+      </>}>
+      <div style={{ fontSize: 13.5 }}>{body}</div>
     </Modal>
   );
 }
@@ -237,14 +240,14 @@ export function Confirm({ title, body, confirmLabel = "Confirm", danger, onYes, 
 export function Ask({ title, why, label, initial = "", type = "text", onOk, onCancel, okLabel = "Save" }) {
   const [v, setV] = useState(initial);
   return (
-    <Modal title={title} why={why} onClose={onCancel}>
+    <Modal title={title} why={why} onClose={onCancel}
+      footer={<>
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className="btn pri" disabled={v === ""} onClick={() => onOk(v)}>{okLabel}</button>
+      </>}>
       <label className="f">{label}</label>
       <input autoFocus type={type} value={v} onChange={(e) => setV(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && v !== "" && onOk(v)} />
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={onCancel}>Cancel</button>
-        <button className="btn pri" disabled={v === ""} onClick={() => onOk(v)}>{okLabel}</button>
-      </div>
     </Modal>
   );
 }

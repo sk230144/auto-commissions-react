@@ -304,16 +304,16 @@ function PasswordDialog({ user, onOk, onCancel, busy }) {
       why={user.you
         ? "Changing your own password does not sign you out."
         : "Resetting someone else's password forces them to choose their own at the next sign-in."}
-      onClose={onCancel}>
+      onClose={onCancel}
+      footer={<>
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className="btn pri" disabled={!ok || busy} onClick={() => onOk(pw)}>Set password</button>
+      </>}>
       <div style={{ fontSize: 13, marginBottom: 12, color: "var(--ink-2)" }}>{user.email}</div>
       <label className="f">New password *</label>
       <input autoFocus type="password" value={pw} onChange={(e) => setPw(e.target.value)}
         placeholder="At least 4 characters"
         onKeyDown={(e) => e.key === "Enter" && ok && onOk(pw)} />
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={onCancel}>Cancel</button>
-        <button className="btn pri" disabled={!ok || busy} onClick={() => onOk(pw)}>Set password</button>
-      </div>
     </Modal>
   );
 }

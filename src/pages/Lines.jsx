@@ -310,7 +310,11 @@ function HoldDialog({ line, onOk, onCancel, busy }) {
   return (
     <Modal title="Hold this line"
       why="Recorded and reversible. Nothing is paid while a line is held, and the reason is shown on the On Hold tab."
-      onClose={onCancel}>
+      onClose={onCancel}
+      footer={<>
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className="btn danger" disabled={!reason.trim() || busy} onClick={() => onOk(reason.trim())}>Hold</button>
+      </>}>
       <div style={{ fontSize: 13, marginBottom: 12, color: "var(--ink-2)" }}>
         {line.our_reference} · {line.party} · {moneyC(line.amount_cents)}
       </div>
@@ -318,10 +322,6 @@ function HoldDialog({ line, onOk, onCancel, busy }) {
       <input autoFocus value={reason} placeholder="e.g. checking adders"
         onChange={(e) => setReason(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && reason.trim() && onOk(reason.trim())} />
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={onCancel}>Cancel</button>
-        <button className="btn danger" disabled={!reason.trim() || busy} onClick={() => onOk(reason.trim())}>Hold</button>
-      </div>
     </Modal>
   );
 }

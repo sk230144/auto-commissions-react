@@ -285,7 +285,11 @@ function CloseDialog({ advance, onOk, onCancel, busy }) {
   return (
     <Modal title="Close this advance"
       why="Closing halts future paybacks. Any outstanding balance stays on record."
-      onClose={onCancel}>
+      onClose={onCancel}
+      footer={<>
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className="btn pri" disabled={!reason.trim() || busy} onClick={() => onOk(reason.trim())}>Close</button>
+      </>}>
       <div style={{ fontSize: 13, marginBottom: 12, color: "var(--ink-2)" }}>
         {advance.code} · {advance.party} · balance {moneyC(advance.balance_cents)}
       </div>
@@ -293,10 +297,6 @@ function CloseDialog({ advance, onOk, onCancel, busy }) {
       <input autoFocus value={reason} placeholder="e.g. settled offline"
         onChange={(e) => setReason(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && reason.trim() && onOk(reason.trim())} />
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={onCancel}>Cancel</button>
-        <button className="btn pri" disabled={!reason.trim() || busy} onClick={() => onOk(reason.trim())}>Close</button>
-      </div>
     </Modal>
   );
 }
@@ -308,7 +308,11 @@ function RunDialog({ onOk, onCancel, busy }) {
   return (
     <Modal title="Run the payback cycle"
       why="Charges every active advance on this rail against its payee's installs inside the window. Running the same cycle twice is skipped, never double-charged."
-      onClose={onCancel}>
+      onClose={onCancel}
+      footer={<>
+        <button className="btn" onClick={onCancel}>Cancel</button>
+        <button className="btn pri" disabled={!ok || busy} onClick={() => onOk(v)}>Run cycle</button>
+      </>}>
       <div className="grid">
         <div><label className="f">Rail</label>
           <select value={v.party_type} onChange={(e) => setV({ ...v, party_type: e.target.value })}>
@@ -318,10 +322,6 @@ function RunDialog({ onOk, onCancel, busy }) {
           <input type="date" value={v.cycle_start} onChange={(e) => setV({ ...v, cycle_start: e.target.value })} /></div>
         <div><label className="f">Cycle end *</label>
           <input type="date" value={v.cycle_end} onChange={(e) => setV({ ...v, cycle_end: e.target.value })} /></div>
-      </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
-        <button className="btn" onClick={onCancel}>Cancel</button>
-        <button className="btn pri" disabled={!ok || busy} onClick={() => onOk(v)}>Run cycle</button>
       </div>
     </Modal>
   );
