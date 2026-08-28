@@ -423,14 +423,16 @@ input::placeholder{color:var(--ink-3);opacity:.8}
 .logincard{position:relative;z-index:1}
 .logincard{width:100%;max-width:392px;background:var(--panel);border:1px solid var(--line);
   border-radius:16px;box-shadow:var(--shadow-lg);padding:30px 30px 24px}
-.loginbrand{margin-bottom:20px;line-height:0}
+/* The identity block is centred; the form below stays left-aligned, because a
+   centred label sits an unpredictable distance from the field it names. */
+.loginbrand{margin-bottom:20px;line-height:0;display:flex;justify-content:center}
 /* Shown only while a stored token is being checked, so an already-signed-in
    user never sees the login form flash past. */
 .bootspin{width:26px;height:26px;border-radius:50%;border:2.5px solid var(--line);
   border-top-color:var(--pri);animation:bootspin .7s linear infinite}
 @keyframes bootspin{to{transform:rotate(360deg)}}
-.logincard h1{margin:0 0 4px;font-size:19px;font-weight:700;letter-spacing:-.02em}
-.loginsub{margin:0 0 22px;font-size:13px;color:var(--ink-3)}
+.logincard h1{margin:0 0 4px;font-size:19px;font-weight:700;letter-spacing:-.02em;text-align:center}
+.loginsub{margin:0 0 22px;font-size:13px;color:var(--ink-3);text-align:center}
 .pwwrap{position:relative}
 .pwwrap input{padding-right:38px}
 .pwtoggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;

@@ -41,7 +41,9 @@ export default function ChangePassword() {
       <form className="logincard" onSubmit={submit}>
         <div className="loginbrand"><Logo height={30} /></div>
         <h1>Choose a password</h1>
-        <p className="loginsub">
+        {/* A full sentence, so it reads left-aligned — centring only suits the
+            short one-line subtitle on the sign-in screen. */}
+        <p className="loginsub" style={{ textAlign: "left" }}>
           {me?.email} — your account uses a temporary password, so pick your own before
           going any further.
         </p>
