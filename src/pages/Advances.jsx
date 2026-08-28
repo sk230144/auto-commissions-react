@@ -4,8 +4,9 @@ import { useStore } from "../lib/store.jsx";
 import { moneyC, toCents, trunc, today } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Pager, Modal, Confirm } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Modal, Confirm, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import { useSortState } from "../lib/sort.js";
 
 const LIMIT = 25;
 const STATUSES = ["", "pending", "active", "repaid", "closed", "cancelled"];
@@ -40,13 +41,16 @@ export default function Advances() {
   const [confirm, setConfirm] = useState(null);
   const [runOpen, setRunOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sort, onSortRaw] = useSortState();
+  const onSort = (k) => { onSortRaw(k); setOffset(0); };
 
   const search = useDebounced(q, 350);
 
   const listQ = useApi(
     (signal) => api.advancesList(
-      { status, search, sort_by: "id", sort_dir: "desc", limit: LIMIT, offset }, { signal }),
-    [status, search, offset]
+      { status, search, sort_by: sort?.k || "id", sort_dir: sort?.dir || "desc",
+        limit: LIMIT, offset }, { signal }),
+    [status, search, offset, JSON.stringify(sort)]
   );
   const rows = listQ.data?.advances || [];
   const total = listQ.data?.total ?? 0;
@@ -124,9 +128,14 @@ export default function Advances() {
                   <thead>
                     <tr>
                       <th style={{ width: 30 }} />
-                      <th>Code</th><th>Payee</th><th>Payback</th>
-                      <th className="r">Starting</th><th className="r">Repaid</th><th className="r">Balance</th>
-                      <th>Status</th><th />
+                      <SortTh k="code" sort={sort} onSort={onSort}>Code</SortTh>
+                      <SortTh k="party" sort={sort} onSort={onSort}>Payee</SortTh>
+                      <th>Payback</th>
+                      <SortTh k="principal" sort={sort} onSort={onSort} className="r">Starting</SortTh>
+                      <SortTh k="repaid" sort={sort} onSort={onSort} className="r">Repaid</SortTh>
+                      <SortTh k="balance" sort={sort} onSort={onSort} className="r">Balance</SortTh>
+                      <SortTh k="status" sort={sort} onSort={onSort}>Status</SortTh>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>

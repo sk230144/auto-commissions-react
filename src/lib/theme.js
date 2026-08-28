@@ -8,7 +8,9 @@ const KEY = "ac.theme";
 
 export function useTheme() {
   const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem(KEY) === "dark" ? "dark" : "light"; } catch { return "light"; }
+    // Dark is the default for a first visit; an explicit "light" choice is the
+    // only thing that overrides it, and it is kept once made.
+    try { return localStorage.getItem(KEY) === "light" ? "light" : "dark"; } catch { return "dark"; }
   });
 
   useEffect(() => {

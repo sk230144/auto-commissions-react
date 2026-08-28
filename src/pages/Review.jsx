@@ -4,9 +4,10 @@ import { useStore } from "../lib/store.jsx";
 import { moneyC, money, csvDownload, trunc } from "../lib/fmt.js";
 import { useApi } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Modal, ErrorState } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Modal, ErrorState, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import ProjectDrawer from "../components/ProjectDrawer.jsx";
+import { useSortState, sortRows } from "../lib/sort.js";
 
 const SEVERITY = { high: "bad", medium: "warn", low: "mut" };
 
@@ -200,14 +201,18 @@ function ItemCard({ item, canAct, busy, onResolve, onOpen }) {
 
 function JobsTable({ jobs, onOpen }) {
   const cols = [...new Set(jobs.flatMap((j) => Object.keys(j)))];
+  const [sort, onSort] = useSortState();
+  const rows = sortRows(jobs, sort);
   return (
     <>
       <div className="sect">Jobs ({jobs.length})</div>
       <div className="tblwrap" style={{ maxHeight: 240 }}>
         <table>
-          <thead><tr>{cols.map((c) => <th key={c}>{c.replace(/_/g, " ")}</th>)}</tr></thead>
+          <thead><tr>{cols.map((c) => (
+            <SortTh key={c} k={c} sort={sort} onSort={onSort}>{c.replace(/_/g, " ")}</SortTh>
+          ))}</tr></thead>
           <tbody>
-            {jobs.map((j, i) => (
+            {rows.map((j, i) => (
               <tr key={j.our || i}>
                 {cols.map((c) => (
                   <td key={c} className={c === "our" ? "id" : undefined}>
@@ -229,17 +234,24 @@ function JobsTable({ jobs, onOpen }) {
 /** These `amount` values are DOLLARS, not cents — the field has no _cents
  *  suffix, and the suffix is the unit contract. */
 function PaymentsTable({ payments, onOpen }) {
+  const [sort, onSort] = useSortState();
+  const rows = sortRows(payments, sort);
   return (
     <>
       <div className="sect">Payments already out ({payments.length})</div>
       <div className="tblwrap" style={{ maxHeight: 240 }}>
         <table>
           <thead>
-            <tr><th>OUR#</th><th>Date</th><th>Kind</th><th className="r">Amount</th>
-              <th>Entered by</th><th>Target status</th></tr>
+            <tr>
+              <SortTh k="our" sort={sort} onSort={onSort}>OUR#</SortTh>
+              <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+              <SortTh k="kind" sort={sort} onSort={onSort}>Kind</SortTh>
+              <SortTh k="amount" sort={sort} onSort={onSort} className="r">Amount</SortTh>
+              <SortTh k="by" sort={sort} onSort={onSort}>Entered by</SortTh>
+              <SortTh k="target_status" sort={sort} onSort={onSort}>Target status</SortTh></tr>
           </thead>
           <tbody>
-            {payments.map((p, i) => (
+            {rows.map((p, i) => (
               <tr key={`${p.our}-${i}`}>
                 <td className="id"><a href="#" onClick={(e) => { e.preventDefault(); onOpen(p.our); }}>{p.our}</a></td>
                 <td>{p.date || <span className="gap">—</span>}</td>
@@ -257,6 +269,8 @@ function PaymentsTable({ payments, onOpen }) {
 }
 
 function OrphanCard({ orphans }) {
+  const [sort, onSort] = useSortState();
+  const rows = sortRows(orphans.parties, sort).slice(0, 50);
   return (
     <div className="card">
       <div className="card-h">
@@ -275,9 +289,13 @@ function OrphanCard({ orphans }) {
         </div>
         <div className="tblwrap" style={{ maxHeight: 260 }}>
           <table>
-            <thead><tr><th>Party</th><th className="r">Payments</th><th className="r">Amount</th></tr></thead>
+            <thead><tr>
+              <SortTh k="party" sort={sort} onSort={onSort}>Party</SortTh>
+              <SortTh k="payments" sort={sort} onSort={onSort} className="r">Payments</SortTh>
+              <SortTh k="amount_cents" sort={sort} onSort={onSort} className="r">Amount</SortTh>
+            </tr></thead>
             <tbody>
-              {orphans.parties.slice(0, 50).map((p) => (
+              {rows.map((p) => (
                 <tr key={p.party}>
                   <td title={p.party}>{trunc(p.party, 44)}</td>
                   <td className="r num">{p.payments}</td>
@@ -297,7 +315,9 @@ function OrphanCard({ orphans }) {
   );
 }
 
-function ResolvedCard({ rows, canAct, busy, onReopen }) {
+function ResolvedCard({ rows: rowsIn, canAct, busy, onReopen }) {
+  const [sort, onSort] = useSortState();
+  const rows = sortRows(rowsIn, sort);
   return (
     <div className="card">
       <div className="card-h">
@@ -308,7 +328,12 @@ function ResolvedCard({ rows, canAct, busy, onReopen }) {
       <div className="card-b flush">
         <div className="tblwrap" style={{ maxHeight: 420 }}>
           <table>
-            <thead><tr><th>Type</th><th>Item</th><th>Ruling</th><th>By</th><th /></tr></thead>
+            <thead><tr>
+              <SortTh k="kind" sort={sort} onSort={onSort}>Type</SortTh>
+              <SortTh k="title" sort={sort} onSort={onSort}>Item</SortTh>
+              <SortTh k="resolution" sort={sort} onSort={onSort}>Ruling</SortTh>
+              <SortTh k="resolved_by" sort={sort} onSort={onSort}>By</SortTh>
+              <th /></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>

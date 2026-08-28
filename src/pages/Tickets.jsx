@@ -4,8 +4,9 @@ import { useStore } from "../lib/store.jsx";
 import { csvDownload, trunc } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Modal, Tip } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Modal, Tip, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import { useSortState, sortRows } from "../lib/sort.js";
 
 const STATUS = {
   open: ["blue", "Open"], building: ["blue", "Building"], blocked: ["bad", "Blocked"],
@@ -36,7 +37,9 @@ export default function Tickets() {
   );
 
   const d = listQ.data;
-  const rows = d?.tickets || [];
+  // The endpoint returns the whole set (500 newest), so this sorts everything.
+  const [sort, onSort] = useSortState();
+  const rows = sortRows(d?.tickets || [], sort);
   const counts = d?.counts || {};
   const waitingCounts = d?.waiting || {};
   const canAct = d?.can_act !== false;
@@ -122,8 +125,14 @@ export default function Tickets() {
               <div className={"tblwrap" + (listQ.refreshing ? " refreshing" : "")}>
                 <table>
                   <thead>
-                    <tr><th>#</th><th>Title</th><th>Raised by</th><th>Area</th>
-                      <th>Waiting on</th><th>Status</th><th /></tr>
+                    <tr>
+                      <SortTh k="id" sort={sort} onSort={onSort}>#</SortTh>
+                      <SortTh k="title" sort={sort} onSort={onSort}>Title</SortTh>
+                      <SortTh k="raised_by" sort={sort} onSort={onSort}>Raised by</SortTh>
+                      <SortTh k="area" sort={sort} onSort={onSort}>Area</SortTh>
+                      <SortTh k="waiting_on" sort={sort} onSort={onSort}>Waiting on</SortTh>
+                      <SortTh k="status" sort={sort} onSort={onSort}>Status</SortTh>
+                      <th /></tr>
                   </thead>
                   <tbody>
                     {rows.map((t) => {

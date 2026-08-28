@@ -269,6 +269,16 @@ main{min-width:0;display:flex;flex-direction:column}
 
 /* ── tables ───────────────────────────────────────────────────────────────── */
 .tblwrap{overflow-x:auto}
+
+/* ── Sortable headers ─────────────────────────────────────────────────────
+   The idle ↕ hint only appears on hover, so a fully-sortable table does not
+   read as a wall of arrows. The active arrow stays. */
+.sortth{cursor:pointer;user-select:none;white-space:nowrap}
+.sortth-i{display:inline-flex;align-items:center;gap:4px}
+.sortth-a{opacity:0;transition:opacity .1s;font-size:10px}
+.sortth-a.on{opacity:1}
+.sortth:hover .sortth-a{opacity:.55}
+.sortth:hover .sortth-a.on{opacity:1}
 table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
 thead th{background:var(--thead-bg);color:var(--thead-ink);text-align:left;font-size:9.5px;
   letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:10px 14px;white-space:nowrap;

@@ -5,8 +5,9 @@ import { useStore } from "../lib/store.jsx";
 import { moneyC, csvDownload } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Async, TableSkeleton, Pager } from "../components/ui.jsx";
+import { Async, TableSkeleton, Pager, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import { useSortState } from "../lib/sort.js";
 
 const LIMIT = 25;
 const STALE_MS = 24 * 3600 * 1000;
@@ -21,14 +22,18 @@ export default function Statements() {
   const [q, setQ] = useState("");
   const [offset, setOffset] = useState(0);
   const nav = useNavigate();
+  // The server default is net_due desc; a cleared sort returns to it.
+  const [sort, onSortRaw] = useSortState();
+  const onSort = (k) => { onSortRaw(k); setOffset(0); };
 
   const search = useDebounced(q, 350);
 
   const q1 = useApi(
     (signal) => api.paymentBalances(
-      { party_type: eco, search, sort_by: "net_due", sort_dir: "desc", limit: LIMIT, offset },
+      { party_type: eco, search, sort_by: sort?.k || "net_due", sort_dir: sort?.dir || "desc",
+        limit: LIMIT, offset },
       { signal }),
-    [eco, search, offset]
+    [eco, search, offset, JSON.stringify(sort)]
   );
 
   const rows = q1.data?.parties || [];
@@ -88,9 +93,11 @@ export default function Statements() {
                 <table>
                   <thead>
                     <tr>
-                      <th>{eco === "rep" ? "Rep" : "Dealer"}</th>
-                      <th className="r">Jobs</th><th className="r">Earned</th>
-                      <th className="r">Settled</th><th className="r">Net due</th>
+                      <SortTh k="party" sort={sort} onSort={onSort}>{eco === "rep" ? "Rep" : "Dealer"}</SortTh>
+                      <SortTh k="jobs" sort={sort} onSort={onSort} className="r">Jobs</SortTh>
+                      <SortTh k="earned" sort={sort} onSort={onSort} className="r">Earned</SortTh>
+                      <SortTh k="settled" sort={sort} onSort={onSort} className="r">Settled</SortTh>
+                      <SortTh k="net_due" sort={sort} onSort={onSort} className="r">Net due</SortTh>
                     </tr>
                   </thead>
                   <tbody>

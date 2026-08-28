@@ -22,6 +22,30 @@ export function Badge({ kind = "mut", title, children }) {
 }
 
 /**
+ * A sortable column header. Pairs with useSortState/sortRows in lib/sort.js.
+ *
+ * `pageOnly` marks tables whose API cannot sort, so clicking reorders only the
+ * loaded page — the tooltip says so rather than letting a page-sort pass for a
+ * dataset-sort.
+ */
+export function SortTh({ k, sort, onSort, children, className = "", pageOnly, style }) {
+  const on = sort?.k === k;
+  return (
+    <th className={("sortth " + className).trim()} style={style}
+      aria-sort={on ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+      title={pageOnly ? "Sorts the rows on this page" : `Sort by this column`}
+      onClick={() => onSort(k)}>
+      <span className="sortth-i">
+        {children}
+        <span className={"sortth-a" + (on ? " on" : "")}>
+          {on ? (sort.dir === "asc" ? "↑" : "↓") : "↕"}
+        </span>
+      </span>
+    </th>
+  );
+}
+
+/**
  * Hover tooltip that appears instantly and wraps, unlike the browser's `title`
  * (which waits about a second and renders one unbroken line). Used wherever
  * text is truncated, so the full value is always one hover away.

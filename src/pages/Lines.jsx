@@ -4,9 +4,10 @@ import { useStore } from "../lib/store.jsx";
 import { moneyC, csvDownload, trunc, toCents, today } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Pager, Confirm, Modal } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Confirm, Modal, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import FilterPanel, { apiFacet } from "../components/FilterPanel.jsx";
+import { useSortState } from "../lib/sort.js";
 import ProjectDrawer from "../components/ProjectDrawer.jsx";
 
 const LIMIT = 25;
@@ -33,6 +34,9 @@ export default function Lines({ tab, title, eyebrow }) {
   const [filter, setFilter] = useState(BLANK);
   const [offset, setOffset] = useState(0);
   const [busy, setBusy] = useState(false);
+  // Server-side: /payments/lines sorts the whole filtered set, not the page.
+  const [sort, onSortRaw] = useSortState();
+  const onSort = (k) => { onSortRaw(k); setOffset(0); };
 
   const search = useDebounced(q, 350);
 
@@ -44,8 +48,9 @@ export default function Lines({ tab, title, eyebrow }) {
   const key = JSON.stringify({ ...common, tab });
 
   const rowsQ = useApi(
-    (signal) => api.paymentLines({ ...common, tab, limit: LIMIT, offset }, { signal }),
-    [key, offset]
+    (signal) => api.paymentLines(
+      { ...common, tab, sort_by: sort?.k, sort_dir: sort?.dir, limit: LIMIT, offset }, { signal }),
+    [key, offset, JSON.stringify(sort)]
   );
   const sumQ = useApi((signal) => api.paymentSummary(common, { signal }), [JSON.stringify(common)]);
 
@@ -184,12 +189,17 @@ export default function Lines({ tab, title, eyebrow }) {
                         <input type="checkbox" style={{ width: "auto", margin: 0 }} checked={allOn}
                           onChange={() => setSel(allOn ? new Set() : new Set(selectable.map((l) => l.line_key)))} />
                       </th>}
-                      <th>OUR#</th>
-                      <th>Payee</th>
-                      <th>Kind</th>
-                      <th className="r">Amount</th>
-                      {tab !== "pending_approval" && <><th className="r">Settled</th><th className="r">Balance</th></>}
-                      <th>{tab === "payment_records" ? "Settled on" : "Milestone"}</th>
+                      <SortTh k="our_reference" sort={sort} onSort={onSort}>OUR#</SortTh>
+                      <SortTh k="party" sort={sort} onSort={onSort}>Payee</SortTh>
+                      <SortTh k="kind" sort={sort} onSort={onSort}>Kind</SortTh>
+                      <SortTh k="amount" sort={sort} onSort={onSort} className="r">Amount</SortTh>
+                      {tab !== "pending_approval" && <>
+                        <SortTh k="settled" sort={sort} onSort={onSort} className="r">Settled</SortTh>
+                        <SortTh k="balance" sort={sort} onSort={onSort} className="r">Balance</SortTh>
+                      </>}
+                      <SortTh k="trigger_date" sort={sort} onSort={onSort}>
+                        {tab === "payment_records" ? "Settled on" : "Milestone"}
+                      </SortTh>
                       <th />
                     </tr>
                   </thead>

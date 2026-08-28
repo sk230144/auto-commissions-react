@@ -4,9 +4,10 @@ import { useStore } from "../lib/store.jsx";
 import { moneyC, toCents, trunc } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Pager, Modal, Confirm } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Modal, Confirm, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import ProjectDrawer from "../components/ProjectDrawer.jsx";
+import { useSortState, sortRows } from "../lib/sort.js";
 
 const LIMIT = 50;
 const STATUS_LOOK = {
@@ -41,8 +42,12 @@ export default function Pushes() {
   const d = listQ.data;
   // Pending and history are split server-side, so the tables and their badges
   // can never disagree.
-  const pending = d?.pending || [];
-  const history = d?.history || [];
+  // /manual-payments/list has no sort parameter, so both tables sort the rows
+  // they hold: complete for pending (all of it arrives), page-only for history.
+  const [pendSort, onPendSort] = useSortState();
+  const [histSort, onHistSort] = useSortState();
+  const pending = sortRows(d?.pending || [], pendSort);
+  const history = sortRows(d?.history || [], histSort);
   const kinds = d?.kinds || [];
   const total = d?.total ?? 0;
 
@@ -101,8 +106,13 @@ export default function Pushes() {
               <div className={"tblwrap" + (busy ? " refreshing" : "")}>
                 <table>
                   <thead>
-                    <tr><th>Payee</th><th>OUR#</th><th>Kind</th><th className="r">Amount</th>
-                      <th>Reason</th><th>Sign-off</th><th /></tr>
+                    <tr>
+                      <SortTh k="party" sort={pendSort} onSort={onPendSort}>Payee</SortTh>
+                      <SortTh k="our" sort={pendSort} onSort={onPendSort}>OUR#</SortTh>
+                      <SortTh k="kind" sort={pendSort} onSort={onPendSort}>Kind</SortTh>
+                      <SortTh k="amount_cents" sort={pendSort} onSort={onPendSort} className="r">Amount</SortTh>
+                      <SortTh k="reason" sort={pendSort} onSort={onPendSort}>Reason</SortTh>
+                      <th>Sign-off</th><th /></tr>
                   </thead>
                   <tbody>
                     {pending.map((p) => (
@@ -166,8 +176,13 @@ export default function Pushes() {
               <div className={"tblwrap" + (listQ.refreshing ? " refreshing" : "")}>
                 <table>
                   <thead>
-                    <tr><th>Payee</th><th>OUR#</th><th>Kind</th><th className="r">Amount</th>
-                      <th>Reason</th><th>Status</th></tr>
+                    <tr>
+                      <SortTh k="party" sort={histSort} onSort={onHistSort} pageOnly>Payee</SortTh>
+                      <SortTh k="our" sort={histSort} onSort={onHistSort} pageOnly>OUR#</SortTh>
+                      <SortTh k="kind" sort={histSort} onSort={onHistSort} pageOnly>Kind</SortTh>
+                      <SortTh k="amount_cents" sort={histSort} onSort={onHistSort} className="r" pageOnly>Amount</SortTh>
+                      <SortTh k="reason" sort={histSort} onSort={onHistSort} pageOnly>Reason</SortTh>
+                      <SortTh k="status" sort={histSort} onSort={onHistSort} pageOnly>Status</SortTh></tr>
                   </thead>
                   <tbody>
                     {history.map((p) => {

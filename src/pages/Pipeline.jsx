@@ -5,10 +5,11 @@ import { useStore } from "../lib/store.jsx";
 import { moneyC, csvDownload, trunc } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Pager, Tip } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Tip, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import FilterPanel, { apiFacet } from "../components/FilterPanel.jsx";
 import ProjectDrawer from "../components/ProjectDrawer.jsx";
+import { useSortState, sortRows } from "../lib/sort.js";
 
 const LIMIT = 25;
 const BUCKETS = ["", "active", "jeopardy", "hold"];
@@ -21,7 +22,7 @@ const BLANK = { dealers: [], states: [], milestone: [], dateFrom: "", dateTo: ""
  * which point the money appears in Payments. What it does show is whether a
  * rate card covers the deal, because that is what blocks pay later.
  *
- * Filtering, search, sorting and paging are all server-side; the facet counts
+ * Filtering, search and paging are server-side; the facet counts
  * in the "+ Filter" panel come from /pipeline/summary.
  */
 export default function Pipeline() {
@@ -59,7 +60,14 @@ export default function Pipeline() {
   const cardsQ = useApi((signal) => api.pipelineCards(eco, { signal }), [eco]);
   const c = cardsQ.data;
 
-  const rows = rowsQ.data?.projects || [];
+  // /pipeline/projects has no sort parameter (fixed newest-sale-first), so
+  // sorting is client-side over the loaded page — the headers say so.
+  const [sort, onSort] = useSortState();
+  const rows = sortRows(rowsQ.data?.projects || [], sort, {
+    kw: (r) => r.system_size_watts || null,
+    date: (r) => r.ntp_date || r.sale_date || null,
+    rate: (r) => (r.rate_covered ? 1 : 0),
+  });
   const total = rowsQ.data?.total ?? 0;
   const s = sumQ.data;
 
@@ -188,11 +196,16 @@ export default function Pipeline() {
                 <table>
                   <thead>
                     <tr>
-                      <th>OUR#</th><th>Customer</th>
-                      {eco === "rep" && <th>Rep</th>}
-                      <th>Dealer</th><th>ST</th><th className="r">kW</th>
-                      <th className="r">Contract</th>
-                      <th>Stage</th><th>Status</th><th>Rate ready</th>
+                      <SortTh k="our_reference" sort={sort} onSort={onSort} pageOnly>OUR#</SortTh>
+                      <SortTh k="customer_name" sort={sort} onSort={onSort} pageOnly>Customer</SortTh>
+                      {eco === "rep" && <SortTh k="rep" sort={sort} onSort={onSort} pageOnly>Rep</SortTh>}
+                      <SortTh k="dealer" sort={sort} onSort={onSort} pageOnly>Dealer</SortTh>
+                      <SortTh k="state" sort={sort} onSort={onSort} pageOnly>ST</SortTh>
+                      <SortTh k="kw" sort={sort} onSort={onSort} className="r" pageOnly>kW</SortTh>
+                      <SortTh k="contract_amount_cents" sort={sort} onSort={onSort} className="r" pageOnly>Contract</SortTh>
+                      <SortTh k="date" sort={sort} onSort={onSort} pageOnly>Stage</SortTh>
+                      <SortTh k="project_status" sort={sort} onSort={onSort} pageOnly>Status</SortTh>
+                      <SortTh k="rate" sort={sort} onSort={onSort} pageOnly>Rate ready</SortTh>
                     </tr>
                   </thead>
                   <tbody>

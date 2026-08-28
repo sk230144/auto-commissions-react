@@ -4,9 +4,10 @@ import { useStore } from "../lib/store.jsx";
 import { moneyC, csvDownload } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Async, TableSkeleton, Pager } from "../components/ui.jsx";
+import { Async, TableSkeleton, Pager, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import ProjectDrawer from "../components/ProjectDrawer.jsx";
+import { useSortState } from "../lib/sort.js";
 
 const LIMIT = 25;
 
@@ -21,21 +22,28 @@ export default function Exposure() {
   const [offset, setOffset] = useState(0);
   const [incOffset, setIncOffset] = useState(0);
   const [open, setOpen] = useState(null);
+  // Two independent tables, two sort states. Server defaults reassert when cleared.
+  const [pSort, onPSortRaw] = useSortState();
+  const onPSort = (k) => { onPSortRaw(k); setOffset(0); };
+  const [iSort, onISortRaw] = useSortState();
+  const onISort = (k) => { onISortRaw(k); setIncOffset(0); };
 
   const search = useDebounced(q, 350);
 
   const sumQ = useApi((signal) => api.exposureSummary({ party_type: eco }, { signal }), [eco]);
   const partiesQ = useApi(
     (signal) => api.exposureParties(
-      { party_type: eco, search, sort_by: "pipeline_commission", sort_dir: "desc", limit: LIMIT, offset },
+      { party_type: eco, search, sort_by: pSort?.k || "pipeline_commission",
+        sort_dir: pSort?.dir || "desc", limit: LIMIT, offset },
       { signal }),
-    [eco, search, offset]
+    [eco, search, offset, JSON.stringify(pSort)]
   );
   const incQ = useApi(
     (signal) => api.exposurePaidIncomplete(
-      { party_type: eco, sort_by: "our_reference", sort_dir: "asc", limit: LIMIT, offset: incOffset },
+      { party_type: eco, sort_by: iSort?.k || "our_reference", sort_dir: iSort?.dir || "asc",
+        limit: LIMIT, offset: incOffset },
       { signal }),
-    [eco, incOffset]
+    [eco, incOffset, JSON.stringify(iSort)]
   );
 
   const t = sumQ.data?.totals;
@@ -116,11 +124,11 @@ export default function Exposure() {
                 <table>
                   <thead>
                     <tr>
-                      <th>{eco === "rep" ? "Rep" : "Dealer"}</th>
-                      <th className="r">Projects</th>
-                      <th className="r">Advances paid</th>
-                      <th className="r">Advances due</th>
-                      <th className="r">Pipeline commission</th>
+                      <SortTh k="party" sort={pSort} onSort={onPSort}>{eco === "rep" ? "Rep" : "Dealer"}</SortTh>
+                      <SortTh k="pre_install_projects" sort={pSort} onSort={onPSort} className="r">Projects</SortTh>
+                      <SortTh k="advances_paid" sort={pSort} onSort={onPSort} className="r">Advances paid</SortTh>
+                      <SortTh k="advances_due" sort={pSort} onSort={onPSort} className="r">Advances due</SortTh>
+                      <SortTh k="pipeline_commission" sort={pSort} onSort={onPSort} className="r">Pipeline commission</SortTh>
                       <th className="r">Adv %</th>
                     </tr>
                   </thead>
@@ -155,7 +163,11 @@ export default function Exposure() {
               empty="No advances sitting on incomplete projects.">
               <div className={"tblwrap" + (incQ.refreshing ? " refreshing" : "")}>
                 <table>
-                  <thead><tr><th>OUR#</th><th>{eco === "rep" ? "Rep" : "Dealer"}</th><th className="r">Advance paid</th></tr></thead>
+                  <thead><tr>
+                    <SortTh k="our_reference" sort={iSort} onSort={onISort}>OUR#</SortTh>
+                    <SortTh k="party" sort={iSort} onSort={onISort}>{eco === "rep" ? "Rep" : "Dealer"}</SortTh>
+                    <SortTh k="advance_paid" sort={iSort} onSort={onISort} className="r">Advance paid</SortTh>
+                  </tr></thead>
                   <tbody>
                     {inc.map((r) => (
                       <tr key={r.our_reference + r.party}>

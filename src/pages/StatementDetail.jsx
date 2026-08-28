@@ -5,9 +5,10 @@ import { useStore } from "../lib/store.jsx";
 import { moneyC, csvDownload } from "../lib/fmt.js";
 import { useApi } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Async, TableSkeleton, Pager, Badge } from "../components/ui.jsx";
+import { Async, TableSkeleton, Pager, Badge, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import ProjectDrawer from "../components/ProjectDrawer.jsx";
+import { useSortState } from "../lib/sort.js";
 
 const LIMIT = 25;
 
@@ -33,6 +34,8 @@ export default function StatementDetail() {
   const { eco, say } = useStore();
   const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState(null);
+  const [sort, onSortRaw] = useSortState();
+  const onSort = (k) => { onSortRaw(k); setOffset(0); };
 
   // Shared filter. `tab` is deliberately NOT in here: /payments/summary rejects
   // it as an unknown field (400), while /payments/lines needs it to mean
@@ -43,8 +46,9 @@ export default function StatementDetail() {
   };
 
   const linesQ = useApi(
-    (signal) => api.paymentLines({ ...req, tab: "", limit: LIMIT, offset }, { signal }),
-    [eco, party, offset]
+    (signal) => api.paymentLines(
+      { ...req, tab: "", sort_by: sort?.k, sort_dir: sort?.dir, limit: LIMIT, offset }, { signal }),
+    [eco, party, offset, JSON.stringify(sort)]
   );
 
   // The money split across queues, for the header. Row count comes from the
@@ -101,9 +105,16 @@ export default function StatementDetail() {
               <div className={"tblwrap" + (linesQ.refreshing ? " refreshing" : "")}>
                 <table>
                   <thead>
-                    <tr><th>OUR#</th><th>Kind</th><th>Milestone</th><th>Date</th>
-                      <th className="r">Amount</th><th className="r">Settled</th>
-                      <th className="r">Balance</th><th>Status</th></tr>
+                    <tr>
+                      <SortTh k="our_reference" sort={sort} onSort={onSort}>OUR#</SortTh>
+                      <SortTh k="kind" sort={sort} onSort={onSort}>Kind</SortTh>
+                      <th>Milestone</th>
+                      <SortTh k="trigger_date" sort={sort} onSort={onSort}>Date</SortTh>
+                      <SortTh k="amount" sort={sort} onSort={onSort} className="r">Amount</SortTh>
+                      <SortTh k="settled" sort={sort} onSort={onSort} className="r">Settled</SortTh>
+                      <SortTh k="balance" sort={sort} onSort={onSort} className="r">Balance</SortTh>
+                      <SortTh k="tab" sort={sort} onSort={onSort}>Status</SortTh>
+                    </tr>
                   </thead>
                   <tbody>
                     {rows.map((l) => {

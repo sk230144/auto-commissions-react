@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 <title>OWE Auto Commissions</title>
+<script>
+  // Stamp the theme BEFORE the bundle loads, or a dark-mode user gets a white
+  // flash on every page load. Must mirror the default in src/lib/theme.js.
+  try {
+    document.documentElement.setAttribute("data-theme",
+      localStorage.getItem("ac.theme") === "light" ? "light" : "dark");
+  } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+</script>
 </head>
 <body>
 <div id="root"></div>

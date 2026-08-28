@@ -5,8 +5,9 @@ import { csvDownload } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
-import { Badge, Async, TableSkeleton, Pager, Modal, Confirm, Tip } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Modal, Confirm, Tip, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import { useSortState, sortRows } from "../lib/sort.js";
 
 const LIMIT = 25;
 const ROLE_TONE = { super_admin: "ok", admin: "blue", operations: "mut", approver: "warn", auditor: "mut" };
@@ -44,7 +45,13 @@ export default function Users() {
   const roleBlurb = (k) => roles.find((r) => r.key === k)?.description || "";
 
   const d = listQ.data;
-  const rows = d?.users || [];
+  // /users/list has no sort parameter — this orders the loaded page.
+  const [sort, onSort] = useSortState();
+  const rows = sortRows(d?.users || [], sort, {
+    user: (u) => u.name || u.email,
+    // -1 means "all pages"; sorted as larger than any real count.
+    page_count: (u) => (u.page_count === -1 ? Number.MAX_SAFE_INTEGER : u.page_count),
+  });
   const total = d?.total ?? 0;
   // Whole-table counts — they do not shrink as the list is filtered.
   const byRole = d?.by_role || {};
@@ -122,8 +129,13 @@ export default function Users() {
               <div className={"tblwrap" + (listQ.refreshing || busy ? " refreshing" : "")}>
                 <table>
                   <thead>
-                    <tr><th>User</th><th>Role</th><th className="r">Pages</th><th>Status</th>
-                      <th>Last login</th><th /></tr>
+                    <tr>
+                      <SortTh k="user" sort={sort} onSort={onSort} pageOnly>User</SortTh>
+                      <SortTh k="role_name" sort={sort} onSort={onSort} pageOnly>Role</SortTh>
+                      <SortTh k="page_count" sort={sort} onSort={onSort} className="r" pageOnly>Pages</SortTh>
+                      <SortTh k="status" sort={sort} onSort={onSort} pageOnly>Status</SortTh>
+                      <SortTh k="last_login" sort={sort} onSort={onSort} pageOnly>Last login</SortTh>
+                      <th /></tr>
                   </thead>
                   <tbody>
                     {rows.map((u) => {
