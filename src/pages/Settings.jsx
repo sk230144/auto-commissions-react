@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Download, ArrowUp, ArrowDown, Plus, Upload } from "lucide-react";
+import { Search, Download, ArrowUp, ArrowDown, Plus, Upload, Pencil, Ban, Undo2 } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
 import { moneyC, csvDownload, trunc, toCents, today, parseCsv } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Pager, Tip, Modal } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Tip, Modal, Confirm } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import { useAuth } from "../lib/auth.jsx";
 import FilterPanel, { apiFacet } from "../components/FilterPanel.jsx";
@@ -68,6 +68,12 @@ export default function Settings({ group }) {
   const { canWrite } = useAuth();
   const mayWrite = canWrite(rail === "rep" ? "rep" : "dealer");
   const [adding, setAdding] = useState(false);
+  const [editRow, setEditRow] = useState(null);      // the row object being edited
+  const [voiding, setVoiding] = useState(null);      // the row awaiting void confirmation
+  const [busyRow, setBusyRow] = useState(false);
+  // A voided row vanishes from every list — even "show all" — so its id must be
+  // captured NOW or a restore needs a database trip. This powers the Undo bar.
+  const [lastVoided, setLastVoided] = useState(null); // { id, table }
   const [importing, setImporting] = useState(false);
 
   const [table, setTable] = useState("");
@@ -82,6 +88,7 @@ export default function Settings({ group }) {
   // Switching rail resets everything — the tabs and columns are different.
   useEffect(() => {
     setTable(""); setShowAll(false); setQ(""); setFilters([]); setSort(null); setOffset(0);
+    setLastVoided(null);
   }, [rail]);
 
   const tabsQ = useApi((signal) => api.ratesSummaryFor(rail)({ signal }), [rail]);
@@ -123,7 +130,7 @@ export default function Settings({ group }) {
   const activeTable = d?.table || table;
 
   const reset = (fn) => (v) => { fn(v); setOffset(0); };
-  const pick = (t) => { setTable(t); setFilters([]); setSort(null); setQ(""); setOffset(0); };
+  const pick = (t) => { setTable(t); setFilters([]); setSort(null); setQ(""); setOffset(0); setLastVoided(null); };
 
   /**
    * Filter options. Dealer and state come from the ledger facets above; the
@@ -236,6 +243,33 @@ export default function Settings({ group }) {
       : say("Nothing to export", true);
   }
 
+  const mayEdit = !!(mayWrite && d && !d.readonly);
+
+  async function doVoid(r) {
+    setBusyRow(true);
+    try {
+      await api.rateRowVoid(rail, activeTable, r.id);
+      // Captured before the reload wipes the row from every list — the undo
+      // bar is the only place the id survives.
+      setLastVoided({ id: r.id, table: activeTable });
+      say(`Row ${r.id} voided — it no longer prices anything`);
+      rowsQ.reload(); tabsQ.reload();
+    } catch (e) { say(e.message, true); }
+    setBusyRow(false);
+    setVoiding(null);
+  }
+
+  async function undoVoid() {
+    setBusyRow(true);
+    try {
+      await api.rateRowRestore(rail, lastVoided.table, lastVoided.id);
+      say(`Row ${lastVoided.id} restored`);
+      setLastVoided(null);
+      rowsQ.reload(); tabsQ.reload();
+    } catch (e) { say(e.message, true); }
+    setBusyRow(false);
+  }
+
   const countLine = rowsQ.loading ? "loading…" : rowsQ.error ? "—"
     : `${total.toLocaleString()} row${total === 1 ? "" : "s"}`
       + (d?.active_only ? ` in force on ${d.as_of}` : " (incl. expired)");
@@ -307,6 +341,18 @@ export default function Settings({ group }) {
           </div>
 
           <div className="card-b flush">
+            {/* The undo window. A voided row is invisible to every list — even
+                "show all" — so once this bar is dismissed a restore needs the
+                id from the database. That is why it names the id out loud. */}
+            {lastVoided && lastVoided.table === activeTable && (
+              <div className="row" style={{ padding: "8px 14px", borderBottom: "1px solid var(--line)", fontSize: 12.5, color: "var(--ink-2)", gap: 8 }}>
+                <span>Row {lastVoided.id} voided. It is hidden from every list, so this bar is the way back.</span>
+                <button className="btn sm" disabled={busyRow} onClick={undoVoid}>
+                  <Undo2 size={12} strokeWidth={2} />Undo
+                </button>
+                <button className="btn sm gho" onClick={() => setLastVoided(null)}>Dismiss</button>
+              </div>
+            )}
             <Async q={rowsQ} what="these settings" isEmpty={!rows.length}
               skeleton={<TableSkeleton cols={8} />}
               empty={search || filterCount
@@ -331,6 +377,7 @@ export default function Settings({ group }) {
                           </th>
                         );
                       })}
+                      {mayEdit && <th className="r" style={{ width: 1 }} aria-label="Actions" />}
                     </tr>
                   </thead>
                   <tbody>
@@ -341,6 +388,20 @@ export default function Settings({ group }) {
                             <Cell col={c} value={r[c.name]} />
                           </td>
                         ))}
+                        {mayEdit && (
+                          <td className="r" style={{ whiteSpace: "nowrap" }}>
+                            <Tip text="Edit this row — only the cells you change are sent.">
+                              <button className="btn sm gho" onClick={() => setEditRow(r)} aria-label={`Edit row ${r.id}`}>
+                                <Pencil size={12} strokeWidth={2} />
+                              </button>
+                            </Tip>
+                            <Tip text="Void (retire) this row — it stops pricing deals but stays in the table, restorable.">
+                              <button className="btn sm gho" onClick={() => setVoiding(r)} aria-label={`Void row ${r.id}`}>
+                                <Ban size={12} strokeWidth={2} />
+                              </button>
+                            </Tip>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -355,32 +416,74 @@ export default function Settings({ group }) {
       {importing && d && (
         <BulkImportDialog rail={rail} table={activeTable} label={d.label} cols={cols}
           onClose={() => setImporting(false)}
-          onDone={(n) => { setImporting(false); say(`${n} row${n === 1 ? "" : "s"} imported into ${d.label}`); rowsQ.reload(); tabsQ.reload(); }} />
+          onDone={(n, skipped) => {
+            setImporting(false);
+            // inserted 0 + skips means the server's "every row already exists".
+            say(n
+              ? `${n.toLocaleString()} row${n === 1 ? "" : "s"} imported into ${d.label}`
+                + (skipped ? ` · ${skipped.toLocaleString()} duplicate${skipped === 1 ? "" : "s"} skipped` : "")
+              : "Every row in that file already exists — nothing was added.", !n);
+            rowsQ.reload(); tabsQ.reload();
+          }} />
       )}
 
-      {adding && d && (
-        <AddRowDialog rail={rail} table={activeTable} label={d.label} cols={cols}
-          onClose={() => setAdding(false)}
-          onSaved={(id) => { setAdding(false); say(`Row ${id} added to ${d.label}`); rowsQ.reload(); tabsQ.reload(); }} />
+      {(adding || editRow) && d && (
+        <RowDialog key={editRow ? `edit-${editRow.id}` : "add"}
+          rail={rail} table={activeTable} label={d.label} cols={cols} existing={editRow}
+          onClose={() => { setAdding(false); setEditRow(null); }}
+          onSaved={(id) => {
+            const was = !!editRow;
+            setAdding(false); setEditRow(null);
+            say(was ? `Row ${id} updated` : `Row ${id} added to ${d.label}`);
+            rowsQ.reload(); tabsQ.reload();
+          }} />
+      )}
+
+      {voiding && (
+        <Confirm danger title={`Void row ${voiding.id}?`}
+          confirmLabel={busyRow ? "Voiding…" : "Void row"}
+          body={`Voiding retires the row: it disappears from this grid and from the engine's rate matching, but stays in the table with who voided it and when. An Undo appears right after — once dismissed, restoring needs the id (${voiding.id}).`}
+          onYes={() => doVoid(voiding)} onNo={() => setVoiding(null)} />
       )}
     </>
   );
 }
 
 /**
- * The Add-row form, built entirely from the list response's `columns[]` — the
- * schema travels with the data, so a column added server-side appears here
- * with no client change. `required` marks what the create endpoint refuses to
- * leave blank; `choices` is a closed set and renders as a dropdown.
+ * One form for add AND edit, built entirely from the list response's
+ * `columns[]` — the schema travels with the data, so a column added
+ * server-side appears here with no client change. `required` marks what the
+ * write endpoints refuse to leave blank; `choices` is a closed set and renders
+ * as a dropdown.
  *
- * Anything left empty is NOT sent: on these tables blank stores NULL and NULL
- * is load-bearing (a blank m2_pct means the classic two-stage ladder), so an
- * empty string must never reach the wire.
+ * Adding: anything left empty is NOT sent — on these tables blank stores NULL
+ * and NULL is load-bearing (a blank m2_pct means the classic two-stage
+ * ladder), so an empty string must never reach the wire.
+ *
+ * Editing (`existing` set): the PUT is PARTIAL — only cells that differ from
+ * the loaded row are sent. A cell emptied on purpose goes as "" to clear it to
+ * NULL; a cell never touched is absent and keeps its stored value. The two are
+ * different things on the wire, which is why the diff matters.
  */
-function AddRowDialog({ rail, table, label, cols, onClose, onSaved }) {
+function RowDialog({ rail, table, label, cols, existing, onClose, onSaved }) {
+  const editing = !!existing;
   // id/void/audit columns are set by the service and refused if sent.
   const fields = cols.filter((c) => !["id", "void", "updated_by", "updated_at"].includes(c.name));
-  const [vals, setVals] = useState(() => ({ start_date: today() }));
+  // The loaded row, rendered back into the form's own dialect: money as
+  // dollars (the form parses dollars), everything else verbatim. Held in state
+  // so the diff below compares against what the form STARTED with, not
+  // whatever a re-render recomputes.
+  const [initial] = useState(() => {
+    if (!editing) return { start_date: today() };
+    const v = {};
+    for (const c of fields) {
+      const cur = existing[c.name];
+      if (cur === null || cur === undefined) { v[c.name] = ""; continue; }
+      v[c.name] = c.kind === "money" ? (cur / 100).toFixed(2) : String(cur);
+    }
+    return v;
+  });
+  const [vals, setVals] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -395,24 +498,46 @@ function AddRowDialog({ rail, table, label, cols, onClose, onSaved }) {
     else if (raw !== "" && c.kind === "money" && toCents(raw) === null) problems.push(`${c.label || c.name} is not a valid amount`);
     else if (raw !== "" && c.kind === "int" && !/^\d+$/.test(raw)) problems.push(`${c.label || c.name} must be a whole number`);
   }
+  // Checked against the row as it WILL be — the form holds every cell, stored
+  // values included, so this mirrors the server's overlay rule.
   if ((vals.end_date || "") !== "" && vals.end_date < (vals.start_date || "")) {
     problems.push("End date cannot be before the start date");
   }
 
+  // The edit payload: only what changed. Recomputed per render so the Save
+  // button can disable itself when there is nothing to save.
+  const changed = {};
+  if (editing) {
+    for (const c of fields) {
+      const raw = (vals[c.name] ?? "").toString().trim();
+      if (raw === (initial[c.name] ?? "").toString().trim()) continue;
+      if (raw === "") { changed[c.name] = ""; continue; }        // cleared → NULL
+      if (c.kind === "money") changed[c.name] = toCents(raw);
+      else if (c.kind === "int") changed[c.name] = parseInt(raw, 10);
+      else changed[c.name] = raw;                                // text/date/decimal verbatim
+    }
+  }
+  const nothingChanged = editing && Object.keys(changed).length === 0;
+
   async function save() {
     setBusy(true);
     setError("");
-    const row = {};
-    for (const c of fields) {
-      const raw = (vals[c.name] ?? "").toString().trim();
-      if (raw === "") continue;                    // omitted → stored NULL
-      if (c.kind === "money") row[c.name] = toCents(raw);   // integer cents on the wire
-      else if (c.kind === "int") row[c.name] = parseInt(raw, 10);
-      else row[c.name] = raw;                      // text/date/decimal verbatim
-    }
     try {
-      const res = await api.rateRowCreate(rail, table, row);
-      onSaved(res?.id);
+      if (editing) {
+        await api.rateRowEdit(rail, table, existing.id, changed);
+        onSaved(existing.id);
+      } else {
+        const row = {};
+        for (const c of fields) {
+          const raw = (vals[c.name] ?? "").toString().trim();
+          if (raw === "") continue;                  // omitted → stored NULL
+          if (c.kind === "money") row[c.name] = toCents(raw);   // integer cents on the wire
+          else if (c.kind === "int") row[c.name] = parseInt(raw, 10);
+          else row[c.name] = raw;                    // text/date/decimal verbatim
+        }
+        const res = await api.rateRowCreate(rail, table, row);
+        onSaved(res?.id);
+      }
     } catch (e) {
       // The 400 names the offending field — show it as-is.
       setError(e.message);
@@ -421,8 +546,10 @@ function AddRowDialog({ rail, table, label, cols, onClose, onSaved }) {
   }
 
   return (
-    <Modal wide title={`Add a row — ${label}`}
-      why="Effective from its start date. Anything left blank stays blank — on these tables an empty cell is meaningful, not zero."
+    <Modal wide title={editing ? `Edit row ${existing.id} — ${label}` : `Add a row — ${label}`}
+      why={editing
+        ? "Only the cells you change are sent — everything else keeps its stored value. Emptying a cell clears it to blank (NULL), which is meaningful on these tables, not zero."
+        : "Effective from its start date. Anything left blank stays blank — on these tables an empty cell is meaningful, not zero."}
       onClose={onClose}
       footer={<>
         {(problems.length > 0 || error) && (
@@ -430,9 +557,12 @@ function AddRowDialog({ rail, table, label, cols, onClose, onSaved }) {
             {error || `${problems[0]}.`}
           </span>
         )}
+        {editing && nothingChanged && !problems.length && !error && (
+          <span className="submeta" style={{ marginRight: "auto" }}>Nothing changed yet.</span>
+        )}
         <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn pri" disabled={problems.length > 0 || busy} onClick={save}>
-          {busy ? "Adding…" : "Add row"}
+        <button className="btn pri" disabled={problems.length > 0 || busy || nothingChanged} onClick={save}>
+          {busy ? "Saving…" : editing ? "Save changes" : "Add row"}
         </button>
       </>}>
       <div className="grid">
@@ -468,16 +598,20 @@ function AddRowDialog({ rail, table, label, cols, onClose, onSaved }) {
 
 
 /**
- * Bulk import — CSV in, schema-validated preview, then import.
+ * Bulk import — CSV in, schema-validated preview, then one atomic import call.
  *
- * There is no bulk endpoint (every variant 404s, and /rows rejects an array),
- * so this posts through the single-row endpoint one request per row, with
- * progress. When a real bulk endpoint ships, only submit() changes.
+ * The server's /rows/import is all-or-nothing per request: every row is
+ * validated first and nothing is written unless all pass. Rows identical to an
+ * existing row are skipped, never re-inserted, so re-sending a file after a
+ * failure is safe. Files beyond the server's caps (2,000 rows / 1 MiB body)
+ * are sent in chunks — each chunk atomic, later chunks protected by the
+ * duplicate skip.
  *
- * The gate is strict: nothing is sent until EVERY row validates. These tables
- * are append-only with no delete, so a half-imported sheet cannot be rolled
- * back — better to refuse up front than to leave someone with 60 of 120 rows
- * in and no way to unwind.
+ * The client-side gate stays even though the server would refuse anyway: it
+ * catches every problem before a byte is sent, in the same pass, without
+ * burning a round-trip per attempt. Each row is stamped with `__line` — its
+ * line in the actual file — so a server-side refusal names lines the uploader
+ * can find, not array indexes.
  */
 function BulkImportDialog({ rail, table, label, cols, onClose, onDone }) {
   const fields = cols.filter((c) => !["id", "void", "updated_by", "updated_at"].includes(c.name));
@@ -490,7 +624,7 @@ function BulkImportDialog({ rail, table, label, cols, onClose, onDone }) {
   const [text, setText] = useState("");
   const [phase, setPhase] = useState("edit");        // edit | busy | failed
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [failure, setFailure] = useState(null);      // { rowNo, message, inserted }
+  const [failure, setFailure] = useState(null);      // { message, report, inserted, skipped }
 
   /** Header-only template, named for the tab. Headers are wire names. */
   function template() {
@@ -568,22 +702,39 @@ function BulkImportDialog({ rail, table, label, cols, onClose, onDone }) {
 
   async function submit() {
     setPhase("busy");
-    setProgress({ done: 0, total: parsed.rows.length });
-    let inserted = 0;
-    for (const r of parsed.rows) {
+    // `__line` = the row's line in the pasted/uploaded file, so a server-side
+    // error report names lines the uploader can actually find.
+    const wire = parsed.rows.map((r) => ({ ...r.row, __line: r.n }));
+
+    // Chunk at the server's caps: 2,000 rows and 1 MiB per request (900 KB
+    // here, leaving headroom for the envelope). Nearly every file is 1 chunk.
+    const chunks = [];
+    let cur = [], size = 0;
+    for (const w of wire) {
+      const s = JSON.stringify(w).length + 1;
+      if (cur.length && (cur.length >= 2000 || size + s > 900_000)) { chunks.push(cur); cur = []; size = 0; }
+      cur.push(w); size += s;
+    }
+    if (cur.length) chunks.push(cur);
+    setProgress({ done: 0, total: chunks.length });
+
+    let inserted = 0, skipped = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      setProgress({ done: i, total: chunks.length });
       try {
-        await api.rateRowCreate(rail, table, r.row);
-        inserted++;
-        setProgress({ done: inserted, total: parsed.rows.length });
+        const res = await api.rateRowsImport(rail, table, chunks[i]);
+        inserted += res?.inserted ?? 0;
+        skipped += (res?.skipped_existing ?? 0) + (res?.skipped_in_file ?? 0);
       } catch (e) {
-        // Rows already sent are in for good (append-only, no delete) — say
-        // exactly where it stopped so the remainder can be re-imported.
-        setFailure({ rowNo: r.n, message: e.message, inserted });
+        // This chunk wrote NOTHING — the import is one transaction. Earlier
+        // chunks are in, but a re-send skips them as exact duplicates, so the
+        // fix is: correct the sheet, import the whole file again.
+        setFailure({ message: e.message, report: e.body?.data || null, inserted, skipped });
         setPhase("failed");
         return;
       }
     }
-    onDone(inserted);
+    onDone(inserted, skipped);
   }
 
   const canImport = phase === "edit" && parsed && !parsed.fatal && parsed.rows.length > 0 && parsed.bad.length === 0;
@@ -601,24 +752,46 @@ function BulkImportDialog({ rail, table, label, cols, onClose, onDone }) {
         )}
         {phase === "busy" && (
           <span className="submeta" style={{ marginRight: "auto" }}>
-            Importing {progress.done} of {progress.total}…
+            {progress.total > 1
+              ? `Importing — part ${progress.done + 1} of ${progress.total}…`
+              : `Importing ${parsed?.rows.length ?? 0} rows…`}
           </span>
         )}
         <button className="btn" disabled={phase === "busy"} onClick={onClose}>
           {phase === "failed" ? "Close" : "Cancel"}
         </button>
         <button className="btn pri" disabled={!canImport} onClick={submit}>
-          {phase === "busy" ? `Importing ${progress.done}/${progress.total}…` : "Import"}
+          {phase === "busy" ? "Importing…" : "Import"}
         </button>
       </>}>
 
       {phase === "failed" && failure && (
         <div className="errstate" style={{ textAlign: "left", padding: "12px 14px", background: "var(--held-bg)", borderRadius: 10, marginBottom: 14 }}>
-          <div className="errstate-h" style={{ marginBottom: 3 }}>Stopped at sheet line {failure.rowNo}</div>
+          {/* The server's headline, verbatim: "37 rows rejected — nothing was written". */}
+          <div className="errstate-h" style={{ marginBottom: 3 }}>{failure.message}</div>
           <div className="errstate-m" style={{ margin: 0 }}>
-            {failure.message} — the first {failure.inserted} row{failure.inserted === 1 ? " was" : "s were"} already
-            added and cannot be undone. Fix the sheet from line {failure.rowNo} and import the remainder.
+            {failure.inserted > 0
+              ? `The ${failure.inserted.toLocaleString()} rows from earlier parts are already in. Fix the lines below and re-import the whole file — rows already added are skipped as duplicates, never doubled.`
+              : "Nothing was written. Fix the lines below and import again."}
+            {failure.report?.hint ? ` ${failure.report.hint}` : ""}
           </div>
+          {failure.report?.errors?.length > 0 && (
+            <div className="tblwrap" style={{ maxHeight: 180, marginTop: 10 }}>
+              <table>
+                <thead><tr><th>Sheet line</th><th>What the server refused</th></tr></thead>
+                <tbody>
+                  {failure.report.errors.map((e, i) => (
+                    <tr key={i}><td className="num">{e.row}</td><td style={{ color: "var(--held)" }}>{e.error}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {failure.report?.capped && (
+            <div className="submeta" style={{ marginTop: 6 }}>
+              The scan stopped at 100 errors — fixing these may reveal more on the next attempt.
+            </div>
+          )}
         </div>
       )}
 

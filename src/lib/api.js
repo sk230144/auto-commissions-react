@@ -86,10 +86,10 @@ async function request(path, { method = "POST", body, signal } = {}) {
     res = await fetch(API_ROOT + path, {
       method,
       headers: {
-        ...(method === "POST" ? { "content-type": "application/json" } : {}),
+        ...(method !== "GET" ? { "content-type": "application/json" } : {}),
         ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}),
       },
-      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+      body: method !== "GET" ? JSON.stringify(body ?? {}) : undefined,
       signal: ctl.signal,
     });
   } catch (e) {
@@ -128,6 +128,7 @@ async function request(path, { method = "POST", body, signal } = {}) {
 }
 
 const post = (path, body, opts) => request(path, { ...opts, method: "POST", body });
+const put = (path, body, opts) => request(path, { ...opts, method: "PUT", body });
 const get = (path, opts) => request(path, { ...opts, method: "GET" });
 
 /** GET query string, skipping absent params. */
@@ -230,11 +231,32 @@ export const salesRepRatesSummary = (opts) => get("/sales-rep-rates/summary", op
 /** One entry point for both rails, so the page is a single component. */
 export const ratesFor = (rail) => rail === "rep" ? salesRepRates : dealerRates;
 export const ratesSummaryFor = (rail) => rail === "rep" ? salesRepRatesSummary : dealerRatesSummary;
+const railBase = (rail) => rail === "rep" ? "/sales-rep-rates" : "/dealer-rates";
 /** Add one row to any tab. `row` is keyed by wire name; money is integer cents,
  *  decimals verbatim strings, and anything omitted stores NULL — blank is
  *  load-bearing on these tables, so absent fields are never sent as "". */
 export const rateRowCreate = (rail, table, row, opts) =>
-  post(rail === "rep" ? "/sales-rep-rates/rows" : "/dealer-rates/rows", { table, row }, opts);
+  post(railBase(rail) + "/rows", { table, row }, opts);
+/** Partial edit: ONLY the cells in `row` change. A cell sent "" clears to NULL
+ *  (refused on required columns); a cell absent is untouched. Same per-kind
+ *  wire rules as the create. Unknown id → 404. */
+export const rateRowEdit = (rail, table, id, row, opts) =>
+  put(railBase(rail) + "/rows", { table, id, row }, opts);
+/** Retire a row: it leaves the grid AND the engine's rate matching, but stays
+ *  in the table with who voided it and when. Restoration is the undo. Both are
+ *  idempotent. NOTE: "show all" never reveals voided rows, so a restore needs
+ *  the id captured before the void — hence the undo affordance in the UI. */
+export const rateRowVoid = (rail, table, id, opts) =>
+  post(railBase(rail) + "/rows/voidance", { table, id }, opts);
+export const rateRowRestore = (rail, table, id, opts) =>
+  post(railBase(rail) + "/rows/restoration", { table, id }, opts);
+/** Bulk import — all-or-nothing per request: every row validates or nothing is
+ *  written. Max 2,000 rows / 1 MiB per call (the caller chunks); duplicates of
+ *  existing rows are skipped, never re-inserted, so re-sending after a failure
+ *  is safe. Rows may carry `__line` (the file line) for error reports.
+ *  A 400 with row errors carries the full report in err.body.data. */
+export const rateRowsImport = (rail, table, rows, opts) =>
+  post(railBase(rail) + "/rows/import", { table, rows }, opts);
 
 // ── Manual payments ─────────────────────────────────────────────────────────
 export const manualPaymentsList = (body, opts) => post("/manual-payments/list", clean(body), opts);
