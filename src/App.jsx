@@ -12,7 +12,7 @@ import { useApi } from "./lib/useApi.js";
 import * as api from "./lib/api.js";
 import { Toast } from "./components/ui.jsx";
 import { Logo, LogoMark } from "./components/Logo.jsx";
-import AskAI from "./components/AskAI.jsx";
+// import AskAI from "./components/AskAI.jsx";   // hidden — see the mount below
 
 import Pipeline from "./pages/Pipeline.jsx";
 import Lines from "./pages/Lines.jsx";
@@ -217,7 +217,11 @@ function AppShell() {
       </main>
 
       <Toast />
-      <AskAI />
+      {/* The floating "Ask" assistant is hidden for now. It answers from the
+          in-memory sample store rather than the live API, so it can contradict
+          the screens around it. Kept whole (component + styles) rather than
+          deleted — uncomment this and its import to bring it back. */}
+      {/* <AskAI /> */}
     </div>
     </NavCtx.Provider>
   );
