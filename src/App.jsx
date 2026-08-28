@@ -38,7 +38,9 @@ const I = { size: 16, strokeWidth: 1.9 };
 const NavCtx = createContext({ navOpen: false, setNavOpen: () => {} });
 
 function AppShell() {
-  const { eco, setEco, lines, review, advances } = useStore();
+  // `lines`, `review` and `advances` used to come from the fixture store — the
+  // badges were their last consumer, and they now come from the API instead.
+  const { eco, setEco } = useStore();
   const { me, can, allowed, signOut } = useAuth();
   const { theme, cycle } = useTheme();
   const [mini, setMini] = useState(() => localStorage.getItem("ac.navMini") === "1");
@@ -57,17 +59,27 @@ function AppShell() {
   }, [navOpen]);
 
   // Badges show the UNFILTERED totals, so the rail keeps meaning whatever the
-  // current page happens to be filtered to.
+  // current page happens to be filtered to. Each comes from the same endpoint
+  // its page uses, so the number in the rail and the number on the page cannot
+  // disagree.
   const badgeQ = useApi(
     (signal) => api.paymentSummary({ party_type: eco, show_zeros: true, show_all_dates: true }, { signal }),
     [eco]
   );
+  // Only fetched when the role can actually reach the page — otherwise the
+  // call is a guaranteed 403, which would churn the session on every load.
+  const reviewQ = useApi((signal) => api.openItems({ signal }), [], { enabled: can("review") });
+  const advancesQ = useApi(
+    (signal) => api.advancesList({ status: "pending", limit: 1 }, { signal }),
+    [], { enabled: can("advances") }
+  );
+
   const tabs = badgeQ.data?.tabs;
   const badge = {
     pending: tabs?.pending_approval?.lines || 0,
     ready: tabs?.ready_to_pay?.lines || 0,
-    review: review.filter((r) => r.status === "open").length,
-    advances: advances.filter((a) => a.status === "pending").length,
+    review: reviewQ.data?.open || 0,
+    advances: advancesQ.data?.total || 0,
   };
 
   // Icons are chosen for what the page is about, not for decoration.
