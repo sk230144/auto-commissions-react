@@ -275,9 +275,12 @@ main{min-width:0;display:flex;flex-direction:column}
    read as a wall of arrows. The active arrow stays. */
 .sortth{cursor:pointer;user-select:none;white-space:nowrap}
 .sortth-i{display:inline-flex;align-items:center;gap:4px}
-.sortth-a{opacity:0;transition:opacity .1s;font-size:10px}
+/* The idle hint is always visible, so a sortable column advertises itself
+   rather than waiting to be discovered. It sits well below the active arrow so
+   the column actually in force still reads at a glance. */
+.sortth-a{opacity:.38;transition:opacity .1s;font-size:10px}
 .sortth-a.on{opacity:1}
-.sortth:hover .sortth-a{opacity:.55}
+.sortth:hover .sortth-a{opacity:.7}
 .sortth:hover .sortth-a.on{opacity:1}
 table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
 thead th{background:var(--thead-bg);color:var(--thead-ink);text-align:left;font-size:9.5px;
