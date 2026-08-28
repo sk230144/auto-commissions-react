@@ -9,7 +9,7 @@ import { Badge, Async, TableSkeleton, Pager, Modal, Confirm, Tip, SortTh } from 
 import { PageHead } from "../App.jsx";
 import { useSortState, sortRows } from "../lib/sort.js";
 
-const LIMIT = 25;
+const LIMIT = 500;   // one full page — the active/suspended split is client-side
 const ROLE_TONE = { super_admin: "ok", admin: "blue", operations: "mut", approver: "warn", auditor: "mut" };
 
 /**
@@ -24,6 +24,9 @@ export default function Users() {
   const { canWrite, refresh } = useAuth();
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
+  // Suspended accounts are kept forever (there is no delete), so the main
+  // table would silently fill with dead rows — they live behind their own tab.
+  const [view, setView] = useState("active");
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState(null);
   const [pwFor, setPwFor] = useState(null);
@@ -46,9 +49,12 @@ export default function Users() {
   const roleBlurb = (k) => roles.find((r) => r.key === k)?.description || "";
 
   const d = listQ.data;
+  const loaded = d?.users || [];
+  const activeN = loaded.filter((u) => u.status !== "suspended").length;
+  const suspendedN = loaded.length - activeN;
   // /users/list has no sort parameter — this orders the loaded page.
   const [sort, onSort] = useSortState();
-  const rows = sortRows(d?.users || [], sort, {
+  const rows = sortRows(loaded.filter((u) => (u.status === "suspended") === (view === "suspended")), sort, {
     user: (u) => u.name || u.email,
     // -1 means "all pages"; sorted as larger than any real count.
     page_count: (u) => (u.page_count === -1 ? Number.MAX_SAFE_INTEGER : u.page_count),
@@ -109,8 +115,16 @@ export default function Users() {
         <div className="card">
           <div className="card-h">
             <div className="seg">
+              <button className={view === "active" ? "on" : ""} onClick={() => setView("active")}>
+                Active<span className="segn">{activeN}</span>
+              </button>
+              <button className={view === "suspended" ? "on" : ""} onClick={() => setView("suspended")}>
+                Suspended<span className="segn">{suspendedN}</span>
+              </button>
+            </div>
+            <div className="seg">
               <button className={role === "" ? "on" : ""} onClick={() => reset(setRole)("")}>
-                All<span className="segn">{Object.values(byRole).reduce((a, b) => a + b, 0) || total}</span>
+                All roles<span className="segn">{Object.values(byRole).reduce((a, b) => a + b, 0) || total}</span>
               </button>
               {roles.filter((r) => byRole[r.key]).map((r) => (
                 <button key={r.key} className={role === r.key ? "on" : ""} onClick={() => reset(setRole)(r.key)}>
@@ -128,7 +142,9 @@ export default function Users() {
           <div className="card-b flush">
             <Async q={listQ} what="users" isEmpty={!rows.length}
               skeleton={<TableSkeleton cols={5} />}
-              empty={search || role ? "No users match." : "No users yet."}>
+              empty={search || role ? "No users match."
+                : view === "suspended" ? "No suspended accounts."
+                : "No active users yet."}>
               <div className={"tblwrap" + (listQ.refreshing || busy ? " refreshing" : "")}>
                 <table>
                   <thead>
