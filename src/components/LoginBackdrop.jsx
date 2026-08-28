@@ -1,34 +1,44 @@
 /**
- * Floating finance glyphs behind the sign-in card, in three parallax layers —
- * the far layer is smaller, blurred and slower, which is what gives the scene
- * depth. Purely decorative (aria-hidden), pointer-transparent, and killed
- * wholesale by the app's prefers-reduced-motion rule.
+ * The sign-in backdrop: a ledger-grid plane tilted in perspective, whose cells
+ * light up under the cursor and fade slowly after it leaves — moving the mouse
+ * paints a trail across the ledger. The finance glyphs are static scenery.
  *
- * The set is a fixed table, not Math.random(): the scene must not reshuffle on
- * every render, and two people looking at the same screen should see the same
- * screen.
+ * The grid is real elements rather than a painted background because a
+ * background image cannot react to hover. ~2000 empty <i> cells is cheap: no
+ * content, no listeners, just CSS :hover.
+ *
+ * Decorative throughout: aria-hidden, and only the cells take pointer events
+ * (the card sits above on its own layer, so nothing interactive is occluded).
  */
+const CELLS = Array.from({ length: 2000 });
+
+// [glyph, left%, top%, size px, layer] — a fixed table, not Math.random():
+// the scene must not reshuffle between renders.
 const GLYPHS = [
-  // [glyph, left%, size px, duration s, delay s, layer]
-  ["$", 6, 30, 26, 0, "near"],
-  ["%", 15, 18, 34, -12, "far"],
-  ["$", 24, 22, 30, -22, "mid"],
-  ["¢", 33, 16, 38, -5, "far"],
-  ["↑", 41, 24, 28, -17, "mid"],
-  ["$", 52, 34, 24, -9, "near"],
-  ["%", 61, 20, 33, -26, "mid"],
-  ["$", 70, 15, 40, -2, "far"],
-  ["¢", 78, 26, 27, -14, "near"],
-  ["↑", 86, 17, 36, -30, "far"],
-  ["$", 93, 21, 31, -20, "mid"],
+  ["$", 7, 76, 30, "near"],
+  ["%", 14, 22, 18, "far"],
+  ["$", 22, 55, 22, "mid"],
+  ["¢", 31, 12, 16, "far"],
+  ["↑", 38, 82, 24, "mid"],
+  ["$", 55, 14, 32, "near"],
+  ["%", 63, 68, 20, "mid"],
+  ["$", 71, 30, 15, "far"],
+  ["¢", 79, 84, 26, "near"],
+  ["↑", 87, 18, 17, "far"],
+  ["$", 93, 58, 21, "mid"],
 ];
 
 export default function LoginBackdrop() {
   return (
     <div className="fxwrap" aria-hidden="true">
-      {GLYPHS.map(([g, left, size, dur, delay, layer], i) => (
+      <div className="gridfx">
+        <div className="gridfx-plane">
+          {CELLS.map((_, i) => <i key={i} />)}
+        </div>
+      </div>
+      {GLYPHS.map(([g, left, top, size, layer], i) => (
         <span key={i} className={`fx fx-${layer}`}
-          style={{ left: `${left}%`, fontSize: size, animationDuration: `${dur}s`, animationDelay: `${delay}s` }}>
+          style={{ left: `${left}%`, top: `${top}%`, fontSize: size }}>
           {g}
         </span>
       ))}

@@ -417,15 +417,8 @@ input::placeholder{color:var(--ink-3);opacity:.8}
    as everything else. */
 .loginwrap{min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:24px;
   position:relative;overflow:hidden}
-/* Layer 1 — the ledger grid, faded out toward the edges so it reads as a
-   surface rather than wallpaper. */
-.loginwrap::before{content:"";position:absolute;inset:0;pointer-events:none;
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size:44px 44px;
-  -webkit-mask-image:radial-gradient(ellipse 90% 80% at 50% 45%, rgba(0,0,0,.5), transparent 78%);
-          mask-image:radial-gradient(ellipse 90% 80% at 50% 45%, rgba(0,0,0,.5), transparent 78%)}
+/* Layer 1 (the ledger grid) is no longer painted here — LoginBackdrop renders
+   it as real cells, tilted in perspective, so they can react to the cursor. */
 /* Layer 2 — brand glows, a rising commission line with milestone dots, and the
    OWE mark (the ring + W from Logo.jsx) as a large watermark bleeding off the
    right edge. All inline SVG, brand colours at watermark opacity. */
@@ -442,22 +435,29 @@ input::placeholder{color:var(--ink-3);opacity:.8}
     radial-gradient(620px 460px at 10% 90%, rgba(3,107,150,.14), transparent 70%),
     radial-gradient(560px 400px at 90% 8%, rgba(156,203,59,.10), transparent 70%)}
 }
-/* Floating glyphs — three parallax layers. Blur + size + speed differences do
-   the 3D work; opacity stays low so the card owns the screen. Colours split
-   between the two brand hues. */
+/* The interactive ledger plane. Oversized and tilted in perspective so it
+   reads as a floor receding behind the card; preserve-3d lets a hovered cell
+   genuinely lift off it. Hover is instant, the fade-out is slow — sweeping the
+   mouse paints a glowing trail that dies away. */
 .fxwrap{position:absolute;inset:0;overflow:hidden;pointer-events:none}
-.fx{position:absolute;bottom:-8%;font-family:var(--mono);font-weight:700;line-height:1;
-  opacity:0;animation:fxrise linear infinite;will-change:transform,opacity}
-.fx-near{color:var(--pri)}
-.fx-mid{color:#7da93c;filter:blur(0.5px)}
-.fx-far{color:var(--pri);filter:blur(1.6px)}
-@keyframes fxrise{
-  0%{transform:translateY(0) rotate(-8deg);opacity:0}
-  12%{opacity:.13}
-  55%{transform:translateY(-58vh) rotate(6deg);opacity:.1}
-  88%{opacity:.05}
-  100%{transform:translateY(-112vh) rotate(-4deg);opacity:0}
-}
+.gridfx{position:absolute;inset:-12% -12% -18% -12%;perspective:1100px}
+.gridfx-plane{position:absolute;inset:0;display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(44px,1fr));grid-auto-rows:44px;
+  transform:rotateX(16deg);transform-origin:50% 30%;transform-style:preserve-3d;
+  -webkit-mask-image:radial-gradient(ellipse 85% 75% at 50% 42%, rgba(0,0,0,.6), transparent 76%);
+          mask-image:radial-gradient(ellipse 85% 75% at 50% 42%, rgba(0,0,0,.6), transparent 76%)}
+.gridfx-plane i{display:block;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+  pointer-events:auto;
+  transition:background 1.1s ease, box-shadow 1.1s ease, transform 1.1s ease}
+.gridfx-plane i:hover{background:var(--pri-soft);
+  box-shadow:0 0 24px var(--pri-line), inset 0 0 10px var(--pri-line);
+  transform:translateZ(16px);
+  transition-duration:.04s}
+/* The glyphs are scenery now — fixed positions, blur = depth, no motion. */
+.fx{position:absolute;font-family:var(--mono);font-weight:700;line-height:1;pointer-events:none}
+.fx-near{color:var(--pri);opacity:.12;transform:rotate(-6deg)}
+.fx-mid{color:#7da93c;opacity:.1;filter:blur(0.5px);transform:rotate(4deg)}
+.fx-far{color:var(--pri);opacity:.08;filter:blur(1.6px);transform:rotate(-3deg)}
 
 /* The card sits above the decoration, hovering slightly — the one piece of
    motion in the foreground, slow enough to feel like depth, not distraction. */
