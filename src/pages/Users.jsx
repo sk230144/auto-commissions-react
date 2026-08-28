@@ -12,6 +12,22 @@ const LIMIT = 25;
 const ROLE_TONE = { super_admin: "ok", admin: "blue", operations: "mut", approver: "warn", auditor: "mut" };
 
 /**
+ * The temporary password is no longer asked for — the invite email carries it,
+ * and a password typed by an admin tends to be weak and get shared over chat.
+ *
+ * The endpoint still requires the field, so one is generated here and never
+ * shown: the new user gets in via the emailed invite, and is forced to choose
+ * their own on first sign-in regardless. Once the backend generates it server
+ * side, delete this and stop sending `temp_password`.
+ */
+function tempPassword() {
+  const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = new Uint32Array(20);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (n) => alphabet[n % alphabet.length]).join("");
+}
+
+/**
  * User Management — who exists, what role they hold, whether they can sign in.
  *
  * Roles are the unit of permission: which pages a role reaches is set once in
@@ -81,7 +97,7 @@ export default function Users() {
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>Export CSV</button>
         {mayWrite && (
           <button className="btn pri" onClick={() => setForm({
-            mode: "create", email: "", name: "", temp_password: "", role: "operations",
+            mode: "create", email: "", name: "", role: "operations",
           })}>
             <UserPlus size={14} strokeWidth={2} />Onboard a user
           </button>
@@ -227,27 +243,27 @@ function UserDialog({ form, setForm, roles, onSave, roleBlurb, busy }) {
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const creating = form.mode === "create";
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
-  const pwOk = !creating || form.temp_password.length >= 4;
-  const ok = emailOk && pwOk;
+  const ok = emailOk;
 
   const chosen = roles.find((r) => r.key === form.role);
 
   return (
     <Modal title={creating ? "Onboard a user" : `Edit ${form.email}`}
       why={creating
-        ? "They sign in with the temporary password, then must choose their own before reaching the app."
+        ? "They are emailed an invite with a one-time password, and must choose their own before reaching the app."
         : "A role change applies to their current session immediately — no sign-out needed."}
       onClose={() => setForm(null)}
       footer={<>
         {!ok && (
           <span className="submeta" style={{ color: "var(--held)", marginRight: "auto" }}>
-            {!emailOk ? "A valid email is required." : "The temporary password needs at least 4 characters."}
+            A valid email is required.
           </span>
         )}
         <button className="btn" onClick={() => setForm(null)}>Cancel</button>
         <button className="btn pri" disabled={!ok || busy}
           onClick={() => onSave(creating
-            ? { email: form.email.trim(), name: form.name.trim(), temp_password: form.temp_password, role: form.role }
+            // Generated, never shown: the invite email is how they get in.
+            ? { email: form.email.trim(), name: form.name.trim(), temp_password: tempPassword(), role: form.role }
             : { id: form.id, name: form.name.trim(), role: form.role })}>
           {creating ? "Onboard" : "Save"}
         </button>
@@ -264,13 +280,6 @@ function UserDialog({ form, setForm, roles, onSave, roleBlurb, busy }) {
           <label className="f">Name</label>
           <input value={form.name} placeholder="How they appear in the app" onChange={set("name")} />
         </div>
-        {creating && (
-          <div>
-            <label className="f">Temporary password *</label>
-            <input value={form.temp_password} onChange={set("temp_password")} placeholder="At least 4 characters" />
-            <div className="submeta">They are forced to replace it at first sign-in.</div>
-          </div>
-        )}
         <div>
           <label className="f">Role *</label>
           <select value={form.role} onChange={set("role")}>
