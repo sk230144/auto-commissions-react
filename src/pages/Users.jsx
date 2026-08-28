@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, UserPlus, KeyRound } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { csvDownload } from "../lib/fmt.js";
+import { csvDownload, today } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
@@ -111,6 +111,8 @@ export default function Users() {
           applies to the person's current session immediately. Accounts are <b>suspended, never
           deleted</b>, so past work keeps its author.
         </div>
+
+        {loaded.length > 0 && <UsersCharts users={loaded} roles={roles} />}
 
         <div className="card">
           <div className="card-h">
@@ -366,5 +368,97 @@ function PasswordDialog({ user, onOk, onCancel, busy }) {
         placeholder="At least 4 characters"
         onKeyDown={(e) => e.key === "Enter" && ok && onOk(pw)} />
     </Modal>
+  );
+}
+
+
+/**
+ * The page's overview, drawn from the full loaded list.
+ *
+ * Two small charts, chosen by the data's job (and only two — the other obvious
+ * candidate, onboarding over time, cannot support a trend yet):
+ *   · people by role — identity + a status split, so two validated series
+ *     (active/suspended) with a legend AND direct labels; identity never rides
+ *     on color alone
+ *   · last sign-in — one series over ordered freshness buckets, so one hue and
+ *     no legend (the title names the series)
+ */
+function UsersCharts({ users, roles }) {
+  const active = users.filter((u) => u.status !== "suspended");
+
+  // Fixed role order from the matrix — never resorted by count, so a role's
+  // position (and its meaning) stays put as numbers change.
+  const roleRows = roles.map((r) => {
+    const mine = users.filter((u) => u.role === r.key);
+    const a = mine.filter((u) => u.status !== "suspended").length;
+    return { name: r.name, a, b: mine.length - a, total: mine.length };
+  }).filter((r) => r.total > 0);
+  const maxRole = Math.max(1, ...roleRows.map((r) => r.total));
+
+  // Freshness buckets over ACTIVE accounts only — a suspended account cannot
+  // sign in, so counting it as "never" would misread as an adoption problem.
+  const t = today();
+  const weekAgo = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
+  const buckets = [
+    { name: "Today", n: active.filter((u) => u.last_login === t).length },
+    { name: "Past 7 days", n: active.filter((u) => u.last_login && u.last_login !== t && u.last_login >= weekAgo).length },
+    { name: "Older", n: active.filter((u) => u.last_login && u.last_login < weekAgo).length },
+    { name: "Never", n: active.filter((u) => !u.last_login).length },
+  ];
+  const maxB = Math.max(1, ...buckets.map((b) => b.n));
+
+  return (
+    <div className="uchart-cards">
+      <div className="card">
+        <div className="card-h"><h2>People by role</h2></div>
+        <div className="card-b">
+          {roleRows.map((r) => (
+            <div className="uchart-row" key={r.name}>
+              <div className="uchart-name" title={r.name}>{r.name}</div>
+              <div className="uchart-track">
+                {/* Widths share one scale (the largest role), so bars compare
+                    across rows, and the stack splits it between the series. */}
+                {r.a > 0 && (
+                  <Tip text={`${r.a} active ${r.name.toLowerCase()} account${r.a === 1 ? "" : "s"}`}
+                    as="span" className="uchart-seg a"
+                    style={{ width: `${(r.a / maxRole) * 100}%` }} />
+                )}
+                {r.b > 0 && (
+                  <Tip text={`${r.b} suspended`} as="span" className="uchart-seg b"
+                    style={{ width: `${(r.b / maxRole) * 100}%` }} />
+                )}
+              </div>
+              <div className="uchart-val">{r.total}</div>
+            </div>
+          ))}
+          <div className="uchart-legend">
+            <span><span className="sw" style={{ background: "var(--chart-a)" }} />Active</span>
+            <span><span className="sw" style={{ background: "var(--chart-b)" }} />Suspended</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-h"><h2>Last sign-in — active accounts</h2></div>
+        <div className="card-b">
+          {buckets.map((b) => (
+            <div className="uchart-row" key={b.name}>
+              <div className="uchart-name">{b.name}</div>
+              <div className="uchart-track">
+                {b.n > 0 && (
+                  <Tip text={`${b.n} account${b.n === 1 ? "" : "s"} — last sign-in: ${b.name.toLowerCase()}`}
+                    as="span" className="uchart-seg a"
+                    style={{ width: `${(b.n / maxB) * 100}%` }} />
+                )}
+              </div>
+              <div className="uchart-val">{b.n}</div>
+            </div>
+          ))}
+          <div className="submeta" style={{ marginTop: 10 }}>
+            "Never" means onboarded but not yet signed in — worth a nudge before it becomes a habit.
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

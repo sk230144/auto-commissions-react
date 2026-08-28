@@ -42,6 +42,8 @@
 
   /* money semantics — kept separate from primary on purpose */
   --due:#0e7c5a;   --due-bg:#e6f4ee;
+  /* Chart series — validated pair (CVD dE>=18, contrast>=3:1 on this surface). */
+  --chart-a:#036b96; --chart-b:#a1620a;
   --pend:#a1620a;  --pend-bg:#fdf3e0;
   --held:#b03030;  --held-bg:#fdeceb;
   --inert:#5a6675; --inert-bg:#eef0f4;
@@ -89,6 +91,7 @@
   --pri-ink:#04121a;
 
   --due:#4fc294;   --due-bg:#0e2a20;
+  --chart-a:#2b9fd0; --chart-b:#b8821f;
   --pend:#d9a441;  --pend-bg:#2d2210;
   --held:#e0736f;  --held-bg:#2e1517;
   --inert:#8899ab; --inert-bg:#1a222d;
@@ -223,6 +226,26 @@ main{min-width:0;display:flex;flex-direction:column}
 .card-b{padding:16px 18px}
 .card-b.flush{padding:0}
 .stub{color:var(--ink-3);font-size:12.5px;padding:28px 18px;text-align:center}
+
+/* ── Charts (User Management) ─────────────────────────────────────────────
+   Plain HTML bars: thin marks, 4px rounded data-end, a 2px surface gap
+   between stacked segments, labels in ink tokens — identity never rides on
+   color alone (legend + direct labels). */
+.uchart-row{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center;
+  padding:5px 0}
+.uchart-name{font-size:12px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.uchart-track{display:flex;align-items:center;height:14px;gap:2px}
+.uchart-seg{height:14px;min-width:3px}
+.uchart-seg.a{background:var(--chart-a)}
+.uchart-seg.b{background:var(--chart-b)}
+/* The data end is the rounded one; the baseline end stays flat. */
+.uchart-track .uchart-seg:last-child{border-radius:0 4px 4px 0}
+.uchart-track .uchart-seg:first-child{border-radius:2px 0 0 2px}
+.uchart-track .uchart-seg:only-child{border-radius:2px 4px 4px 2px}
+.uchart-val{font-size:12px;font-family:var(--mono);color:var(--ink-2);min-width:24px;text-align:right}
+.uchart-legend{display:flex;gap:14px;margin-top:12px;font-size:11.5px;color:var(--ink-2)}
+.uchart-legend .sw{display:inline-block;width:9px;height:9px;border-radius:2.5px;margin-right:5px;vertical-align:-1px}
+.uchart-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:16px}
 
 /* ── async states ─────────────────────────────────────────────────────────── */
 .sk{display:inline-block;height:11px;border-radius:4px;max-width:100%;

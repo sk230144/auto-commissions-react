@@ -68,11 +68,11 @@ const CAN_HOVER = typeof window !== "undefined" && typeof window.matchMedia === 
   ? window.matchMedia("(hover: hover)").matches
   : true;
 
-export function Tip({ text, children, className = "", as: Tag = "span" }) {
+export function Tip({ text, children, className = "", as: Tag = "span", style }) {
   const [box, setBox] = useState(null);
   const ref = useRef(null);
 
-  if (!text) return <Tag className={className}>{children}</Tag>;
+  if (!text) return <Tag className={className} style={style}>{children}</Tag>;
 
   const show = () => {
     const r = ref.current?.getBoundingClientRect();
@@ -93,7 +93,7 @@ export function Tip({ text, children, className = "", as: Tag = "span" }) {
       {/* No `title` where hover works — it would draw a second, unstyled
           tooltip next to this one. aria-label keeps the full text available to
           screen readers either way. */}
-      <Tag ref={ref} className={`tip ${className}`.trim()} tabIndex={0}
+      <Tag ref={ref} className={`tip ${className}`.trim()} style={style} tabIndex={0}
         title={CAN_HOVER ? undefined : text} aria-label={text}
         onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
         {children}
