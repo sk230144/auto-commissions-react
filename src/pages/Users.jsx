@@ -12,22 +12,6 @@ const LIMIT = 25;
 const ROLE_TONE = { super_admin: "ok", admin: "blue", operations: "mut", approver: "warn", auditor: "mut" };
 
 /**
- * The temporary password is no longer asked for — the invite email carries it,
- * and a password typed by an admin tends to be weak and get shared over chat.
- *
- * The endpoint still requires the field, so one is generated here and never
- * shown: the new user gets in via the emailed invite, and is forced to choose
- * their own on first sign-in regardless. Once the backend generates it server
- * side, delete this and stop sending `temp_password`.
- */
-function tempPassword() {
-  const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = new Uint32Array(20);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (n) => alphabet[n % alphabet.length]).join("");
-}
-
-/**
  * User Management — who exists, what role they hold, whether they can sign in.
  *
  * Roles are the unit of permission: which pages a role reaches is set once in
@@ -262,8 +246,9 @@ function UserDialog({ form, setForm, roles, onSave, roleBlurb, busy }) {
         <button className="btn" onClick={() => setForm(null)}>Cancel</button>
         <button className="btn pri" disabled={!ok || busy}
           onClick={() => onSave(creating
-            // Generated, never shown: the invite email is how they get in.
-            ? { email: form.email.trim(), name: form.name.trim(), temp_password: tempPassword(), role: form.role }
+            // No password crosses the wire from here — the server generates a
+            // one-time password and emails the invite.
+            ? { email: form.email.trim(), name: form.name.trim(), role: form.role }
             : { id: form.id, name: form.name.trim(), role: form.role })}>
           {creating ? "Onboard" : "Save"}
         </button>
