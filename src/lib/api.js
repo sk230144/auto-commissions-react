@@ -230,6 +230,11 @@ export const salesRepRatesSummary = (opts) => get("/sales-rep-rates/summary", op
 /** One entry point for both rails, so the page is a single component. */
 export const ratesFor = (rail) => rail === "rep" ? salesRepRates : dealerRates;
 export const ratesSummaryFor = (rail) => rail === "rep" ? salesRepRatesSummary : dealerRatesSummary;
+/** Add one row to any tab. `row` is keyed by wire name; money is integer cents,
+ *  decimals verbatim strings, and anything omitted stores NULL — blank is
+ *  load-bearing on these tables, so absent fields are never sent as "". */
+export const rateRowCreate = (rail, table, row, opts) =>
+  post(rail === "rep" ? "/sales-rep-rates/rows" : "/dealer-rates/rows", { table, row }, opts);
 
 // ── Manual payments ─────────────────────────────────────────────────────────
 export const manualPaymentsList = (body, opts) => post("/manual-payments/list", clean(body), opts);

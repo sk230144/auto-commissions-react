@@ -9,7 +9,25 @@ export const money = (n) =>
 /** The API speaks integer cents, signed. Divide once, at the boundary — never
  *  let a cents figure reach a component that thinks in dollars. */
 export const fromCents = (c) => (Number(c) || 0) / 100;
-export const toCents = (d) => Math.round((Number(d) || 0) * 100);
+/**
+ * Dollars-as-typed → integer cents, by splitting on the decimal point rather
+ * than multiplying a float: parseFloat("8.115") * 100 is 811.4999…, which
+ * rounds to 811 — a cent short. The doc calls this out specifically.
+ *
+ * Returns null on unparseable input, never a silent $0 — every caller treats
+ * null as invalid rather than as free money.
+ */
+export function toCents(v) {
+  let s = String(v ?? "").trim().replace(/[$,\s]/g, "");
+  if (s === "") return null;
+  let neg = false;
+  if (s.startsWith("-")) { neg = true; s = s.slice(1); }
+  if (!/^\d*(\.\d*)?$/.test(s) || s === "" || s === ".") return null;
+  const [d = "0", f = ""] = s.split(".");
+  let cents = parseInt(d || "0", 10) * 100 + parseInt((f + "00").slice(0, 2) || "0", 10);
+  if (f.length > 2 && f[2] >= "5") cents += 1;   // round half up on the 3rd decimal
+  return neg ? -cents : cents;
+}
 /** Money straight from an API field. */
 export const moneyC = (c) => money(fromCents(c));
 

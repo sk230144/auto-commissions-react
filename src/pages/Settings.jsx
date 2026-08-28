@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Download, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, Download, ArrowUp, ArrowDown, Plus } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload, trunc } from "../lib/fmt.js";
+import { moneyC, csvDownload, trunc, toCents, today } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Pager, Tip } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Tip, Modal } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
+import { useAuth } from "../lib/auth.jsx";
 import FilterPanel, { apiFacet } from "../components/FilterPanel.jsx";
 
 const LIMIT = 100;
@@ -64,6 +65,9 @@ function Cell({ col, value }) {
 export default function Settings({ group }) {
   const rail = group === "REP" ? "rep" : "dealer";
   const { say } = useStore();
+  const { canWrite } = useAuth();
+  const mayWrite = canWrite(rail === "rep" ? "rep" : "dealer");
+  const [adding, setAdding] = useState(false);
 
   const [table, setTable] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -271,6 +275,13 @@ export default function Settings({ group }) {
           <div className="card-h">
             <h2>{d?.label || "Rows"}</h2>
             {d?.readonly && <Badge kind="mut">read-only</Badge>}
+            {/* Writes are per-screen permissions, and the legacy archive
+                refuses inserts — the button only exists where a row can land. */}
+            {mayWrite && d && !d.readonly && (
+              <button className="btn sm pri" onClick={() => setAdding(true)}>
+                <Plus size={13} strokeWidth={2} />Add row
+              </button>
+            )}
             <div className="sp" />
             <label className="row" style={{ gap: 5, fontSize: 12.5, color: "var(--ink-3)" }}>
               <input type="checkbox" style={{ width: "auto" }} checked={showAll}
@@ -336,6 +347,111 @@ export default function Settings({ group }) {
           </div>
         </div>
       </div>
+
+      {adding && d && (
+        <AddRowDialog rail={rail} table={activeTable} label={d.label} cols={cols}
+          onClose={() => setAdding(false)}
+          onSaved={(id) => { setAdding(false); say(`Row ${id} added to ${d.label}`); rowsQ.reload(); tabsQ.reload(); }} />
+      )}
     </>
+  );
+}
+
+/**
+ * The Add-row form, built entirely from the list response's `columns[]` — the
+ * schema travels with the data, so a column added server-side appears here
+ * with no client change. `required` marks what the create endpoint refuses to
+ * leave blank; `choices` is a closed set and renders as a dropdown.
+ *
+ * Anything left empty is NOT sent: on these tables blank stores NULL and NULL
+ * is load-bearing (a blank m2_pct means the classic two-stage ladder), so an
+ * empty string must never reach the wire.
+ */
+function AddRowDialog({ rail, table, label, cols, onClose, onSaved }) {
+  // id/void/audit columns are set by the service and refused if sent.
+  const fields = cols.filter((c) => !["id", "void", "updated_by", "updated_at"].includes(c.name));
+  const [vals, setVals] = useState(() => ({ start_date: today() }));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const set = (name) => (e) => { setVals((v) => ({ ...v, [name]: e.target.value })); setError(""); };
+  const isRequired = (c) => c.required === true || c.name === "start_date";
+
+  // What is missing or malformed, checked the way the server will.
+  const problems = [];
+  for (const c of fields) {
+    const raw = (vals[c.name] ?? "").toString().trim();
+    if (isRequired(c) && raw === "") problems.push(`${c.label || c.name} is required`);
+    else if (raw !== "" && c.kind === "money" && toCents(raw) === null) problems.push(`${c.label || c.name} is not a valid amount`);
+    else if (raw !== "" && c.kind === "int" && !/^\d+$/.test(raw)) problems.push(`${c.label || c.name} must be a whole number`);
+  }
+  if ((vals.end_date || "") !== "" && vals.end_date < (vals.start_date || "")) {
+    problems.push("End date cannot be before the start date");
+  }
+
+  async function save() {
+    setBusy(true);
+    setError("");
+    const row = {};
+    for (const c of fields) {
+      const raw = (vals[c.name] ?? "").toString().trim();
+      if (raw === "") continue;                    // omitted → stored NULL
+      if (c.kind === "money") row[c.name] = toCents(raw);   // integer cents on the wire
+      else if (c.kind === "int") row[c.name] = parseInt(raw, 10);
+      else row[c.name] = raw;                      // text/date/decimal verbatim
+    }
+    try {
+      const res = await api.rateRowCreate(rail, table, row);
+      onSaved(res?.id);
+    } catch (e) {
+      // The 400 names the offending field — show it as-is.
+      setError(e.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal wide title={`Add a row — ${label}`}
+      why="Effective from its start date. Anything left blank stays blank — on these tables an empty cell is meaningful, not zero."
+      onClose={onClose}
+      footer={<>
+        {(problems.length > 0 || error) && (
+          <span className="submeta" style={{ color: "var(--held)", marginRight: "auto" }}>
+            {error || `${problems[0]}.`}
+          </span>
+        )}
+        <button className="btn" onClick={onClose}>Cancel</button>
+        <button className="btn pri" disabled={problems.length > 0 || busy} onClick={save}>
+          {busy ? "Adding…" : "Add row"}
+        </button>
+      </>}>
+      <div className="grid">
+        {fields.map((c) => (
+          <div key={c.name}>
+            <label className="f">
+              {c.label || c.name}{isRequired(c) ? " *" : ""}
+              {c.kind === "money" && <span className="submeta" style={{ display: "inline" }}> ($)</span>}
+            </label>
+            {Array.isArray(c.choices) && c.choices.length ? (
+              <select value={vals[c.name] ?? ""} onChange={set(c.name)}>
+                <option value="">—</option>
+                {c.choices.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ) : c.kind === "date" ? (
+              <input type="date" value={vals[c.name] ?? ""} onChange={set(c.name)} />
+            ) : c.kind === "money" ? (
+              <input inputMode="decimal" placeholder="e.g. 4,000.00" value={vals[c.name] ?? ""} onChange={set(c.name)} />
+            ) : c.kind === "int" ? (
+              <input inputMode="numeric" placeholder="whole number" value={vals[c.name] ?? ""} onChange={set(c.name)} />
+            ) : c.kind === "decimal" ? (
+              // A rate or a percentage — sent verbatim, never converted to cents.
+              <input inputMode="decimal" placeholder="e.g. 1.8" value={vals[c.name] ?? ""} onChange={set(c.name)} />
+            ) : (
+              <input value={vals[c.name] ?? ""} onChange={set(c.name)} />
+            )}
+          </div>
+        ))}
+      </div>
+    </Modal>
   );
 }
