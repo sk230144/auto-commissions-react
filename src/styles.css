@@ -374,7 +374,31 @@ input::placeholder{color:var(--ink-3);opacity:.8}
 /* ── Sign in ───────────────────────────────────────────────────────────────
    Its own full-page layout: the shell does not mount until someone is signed
    in, so there is no rail or header to fit around. */
-.loginwrap{min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:24px}
+/* The sign-in backdrop says what the app is about — a ledger grid, a rising
+   pay-out line, and glows in the two brand colours — all drawn in CSS/SVG so
+   nothing loads from anywhere. Every layer sits at very low contrast: the card
+   is the subject, the backdrop is context. Theme-aware through the same tokens
+   as everything else. */
+.loginwrap{min-height:100vh;display:grid;place-items:center;background:var(--bg);padding:24px;
+  position:relative;overflow:hidden}
+/* Layer 1 — the ledger grid, faded out toward the edges so it reads as a
+   surface rather than wallpaper. */
+.loginwrap::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size:44px 44px;
+  -webkit-mask-image:radial-gradient(ellipse 90% 80% at 50% 45%, rgba(0,0,0,.5), transparent 78%);
+          mask-image:radial-gradient(ellipse 90% 80% at 50% 45%, rgba(0,0,0,.5), transparent 78%)}
+/* Layer 2 — brand glows plus a rising commission line with milestone dots
+   (an inline SVG, mid-tone so it registers on both themes). */
+.loginwrap::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMax slice"><path d="M0 360 L140 322 L280 338 L420 262 L560 284 L700 200 L840 168 L980 96 L1200 44" fill="none" stroke="rgba(70,145,185,0.16)" stroke-width="2.5"/><g fill="rgba(70,145,185,0.22)"><circle cx="420" cy="262" r="4"/><circle cx="700" cy="200" r="4"/><circle cx="980" cy="96" r="4"/></g><g fill="rgba(150,190,80,0.2)"><circle cx="140" cy="322" r="4"/><circle cx="840" cy="168" r="4"/></g></svg>') bottom / 100% auto no-repeat,
+    radial-gradient(620px 460px at 10% 90%, rgba(3,107,150,.14), transparent 70%),
+    radial-gradient(560px 400px at 90% 8%, rgba(156,203,59,.10), transparent 70%)}
+/* The card sits above the decoration. */
+.logincard{position:relative;z-index:1}
 .logincard{width:100%;max-width:392px;background:var(--panel);border:1px solid var(--line);
   border-radius:16px;box-shadow:var(--shadow-lg);padding:30px 30px 24px}
 .loginbrand{margin-bottom:20px;line-height:0}
