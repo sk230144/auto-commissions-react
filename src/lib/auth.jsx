@@ -15,6 +15,32 @@ import { ApiError, setAuthToken, setOnUnauthorized, authLogin, authMe } from "./
 
 const TOKEN_KEY = "ac.token";
 
+/**
+ * Where the token lives decides how long the session outlives the browser.
+ *
+ *   remembered → localStorage    survives closing the browser, up to the
+ *                                token's own 12-hour expiry
+ *   not        → sessionStorage  dies when the tab closes, which is what a
+ *                                shared machine needs
+ *
+ * Both are read on boot, so a session started either way is restored. Writes
+ * only ever go to the chosen one, and signing out clears both.
+ */
+const readToken = () => {
+  try { return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY) || ""; }
+  catch { return ""; }
+};
+const writeToken = (token, remember) => {
+  try {
+    clearToken();
+    (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+  } catch { /* private mode — the session simply will not survive a reload */ }
+};
+const clearToken = () => {
+  try { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); }
+  catch { /* ignore */ }
+};
+
 /** The 16 page permissions, grouped for the sidebar and the access matrix. */
 export const PAGES = [
   { key: "pipeline_overview", route: "pipeline", label: "Pipeline Overview", group: "Payments" },
@@ -46,12 +72,12 @@ export function AuthProvider({ children }) {
   const [me, setMe] = useState(null);
   // Until the stored token is checked we know nothing — rendering the login
   // screen during that gap would flash it at an already-signed-in user.
-  const [booting, setBooting] = useState(() => !!localStorage.getItem(TOKEN_KEY));
+  const [booting, setBooting] = useState(() => !!readToken());
   const [authError, setAuthError] = useState("");
 
   /** Rebuild the session from a stored token (F5), or drop it if it is dead. */
   const refresh = useCallback(async () => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = readToken();
     if (!token) { setMe(null); setBooting(false); return null; }
     setAuthToken(token);
     try {
@@ -62,7 +88,7 @@ export function AuthProvider({ children }) {
       // 401 means the token expired or the account was suspended. Anything
       // else (the server being down) must NOT sign the user out.
       if (e instanceof ApiError && e.status === 401) {
-        localStorage.removeItem(TOKEN_KEY);
+        clearToken();
         setAuthToken(null);
         setMe(null);
       }
@@ -83,7 +109,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     setOnUnauthorized((status, message) => {
       if (status === 401) {
-        localStorage.removeItem(TOKEN_KEY);
+        clearToken();
         setAuthToken(null);
         setMe(null);
         setAuthError(message || "Your session has ended. Sign in again.");
@@ -95,10 +121,10 @@ export function AuthProvider({ children }) {
   }, [refresh]);
 
   /** Returns an error string rather than throwing, so the form can show it. */
-  const signIn = useCallback(async (email, password) => {
+  const signIn = useCallback(async (email, password, remember = true) => {
     try {
       const data = await authLogin(email.trim(), password);
-      localStorage.setItem(TOKEN_KEY, data.token);
+      writeToken(data.token, remember);
       setAuthToken(data.token);
       setAuthError("");
       // The login response carries the same user object as /auth/me, so the
@@ -111,7 +137,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    clearToken();
     setAuthToken(null);
     setMe(null);
     setAuthError("");

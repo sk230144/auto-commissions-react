@@ -3,6 +3,8 @@ import { LogIn, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../lib/auth.jsx";
 import { Logo } from "../components/Logo.jsx";
 
+const REMEMBER_KEY = "ac.remember";
+
 /**
  * Sign in. The server decides — a wrong email and a wrong password return the
  * same message deliberately, so the form cannot be used to discover which
@@ -15,12 +17,18 @@ export default function Login() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // The choice itself is remembered, so someone on a shared machine does not
+  // have to untick it every time.
+  const [remember, setRemember] = useState(() => {
+    try { return localStorage.getItem(REMEMBER_KEY) !== "0"; } catch { return true; }
+  });
 
   async function submit(e) {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const err = await signIn(email, password);
+    try { localStorage.setItem(REMEMBER_KEY, remember ? "1" : "0"); } catch { /* ignore */ }
+    const err = await signIn(email, password, remember);
     setBusy(false);
     // On success this component unmounts, so only a failure lands here.
     if (err) setError(err);
@@ -51,6 +59,20 @@ export default function Login() {
             {show ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
         </div>
+
+        <label className="remember">
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+          <span>
+            Keep me signed in
+            {/* Says what it actually does, since the alternative is a session
+                that ends with the tab rather than one that never ends. */}
+            <span className="submeta">
+              {remember
+                ? "Stays signed in on this browser until the session expires."
+                : "Signs out when this tab is closed."}
+            </span>
+          </span>
+        </label>
 
         {error && <div className="loginerr" role="alert">{error}</div>}
 

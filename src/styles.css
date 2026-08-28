@@ -392,6 +392,10 @@ input::placeholder{color:var(--ink-3);opacity:.8}
 .pwtoggle:hover{color:var(--ink)}
 .loginerr{margin-top:12px;font-size:12.5px;color:var(--held);background:var(--held-bg);
   border-radius:8px;padding:9px 12px;line-height:1.5}
+.remember{display:flex;gap:9px;align-items:flex-start;margin-top:16px;cursor:pointer;
+  font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.remember input{width:auto;margin:1px 0 0;flex:0 0 auto;cursor:pointer}
+.remember .submeta{display:block;margin-top:2px}
 /* The build says what it is: this gates the interface, not the data. */
 .loginnote{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);
   font-size:11.5px;color:var(--ink-3);line-height:1.65}
