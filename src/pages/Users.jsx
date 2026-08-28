@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, UserPlus, KeyRound } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
 import { csvDownload, today } from "../lib/fmt.js";
@@ -21,7 +21,7 @@ const ROLE_TONE = { super_admin: "ok", admin: "blue", operations: "mut", approve
  */
 export default function Users() {
   const { say } = useStore();
-  const { canWrite, refresh } = useAuth();
+  const { me, canWrite, refresh } = useAuth();
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
   // Suspended accounts are kept forever (there is no delete), so the main
@@ -30,7 +30,6 @@ export default function Users() {
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState(null);
   const [pwFor, setPwFor] = useState(null);
-  const [creds, setCreds] = useState(null);   // {email, password} — shown once after onboarding
   const [confirm, setConfirm] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -43,13 +42,59 @@ export default function Users() {
   );
 
   // Roles come from the access matrix, so this screen never hardcodes the set.
-  const matrixQ = useApi((signal) => api.accessMatrix({ signal }), []);
-  const roles = matrixQ.data?.roles || [];
-  const roleName = (k) => roles.find((r) => r.key === k)?.name || k;
-  const roleBlurb = (k) => roles.find((r) => r.key === k)?.description || "";
+  // But Access Control is its own permission: a plain Admin holds User
+  // Management and NOT the matrix, so this 403s for them. That is expected, not
+  // a session problem — hence `quiet`, and hence the fallback below.
+  const matrixQ = useApi((signal) => api.accessMatrix({ signal, quiet: true }), []);
 
   const d = listQ.data;
-  const loaded = d?.users || [];
+
+  /**
+   * Super-admin accounts are hidden from everyone who is not one.
+   *
+   * A super admin is locked open on every page by design, so the row advertises
+   * an account that cannot be locked down — and an Admin can edit roles, which
+   * makes the list a menu. Own-role accounts stay visible to their peers, who
+   * can already act on them.
+   *
+   * This filters the loaded page rather than the query because /users/list has
+   * no "exclude role" parameter. So it is a presentation rule, not a security
+   * boundary — the server is what actually refuses the writes. Everything
+   * downstream (tabs, counts, chart, export) reads this list, so nothing can
+   * disagree about who is on screen.
+   */
+  const iAmSuper = me?.role === "super_admin";
+  const loaded = useMemo(() => {
+    const all = d?.users || [];
+    return iAmSuper ? all : all.filter((u) => u.role !== "super_admin" || u.you);
+  }, [d, iAmSuper]);
+  const hiddenSupers = (d?.users?.length || 0) - loaded.length;
+
+  /**
+   * The role list, with the matrix as the richer source and the users
+   * themselves as the fallback — every row already carries `role` +
+   * `role_name`, so the screen still knows its roles when the matrix is out of
+   * reach. Without this the role tabs and the by-role chart silently emptied
+   * for anyone who is not a super admin.
+   *
+   * `by_role` is the complete census (it covers the whole table, not the loaded
+   * page), so it seeds the keys; names come from whichever user carries them.
+   */
+  const roles = useMemo(() => {
+    const fromMatrix = matrixQ.data?.roles;
+    const list = fromMatrix?.length ? fromMatrix : (() => {
+      const names = new Map();
+      for (const u of loaded) if (u.role && !names.has(u.role)) names.set(u.role, u.role_name || u.role);
+      for (const k of Object.keys(d?.by_role || {})) if (!names.has(k)) names.set(k, k);
+      return [...names].map(([key, name]) => ({ key, name }));
+    })();
+    // Hidden rows must not leave a role behind: an empty "Super admin" tab, or
+    // a role in the create-user dropdown the server would refuse anyway.
+    return iAmSuper ? list : list.filter((r) => r.key !== "super_admin");
+  }, [matrixQ.data, loaded, d, iAmSuper]);
+
+  const roleName = (k) => roles.find((r) => r.key === k)?.name || k;
+  const roleBlurb = (k) => roles.find((r) => r.key === k)?.description || "";
   const activeN = loaded.filter((u) => u.status !== "suspended").length;
   const suspendedN = loaded.length - activeN;
   // /users/list has no sort parameter — this orders the loaded page.
@@ -59,9 +104,16 @@ export default function Users() {
     // -1 means "all pages"; sorted as larger than any real count.
     page_count: (u) => (u.page_count === -1 ? Number.MAX_SAFE_INTEGER : u.page_count),
   });
-  const total = d?.total ?? 0;
-  // Whole-table counts — they do not shrink as the list is filtered.
-  const byRole = d?.by_role || {};
+  // Whole-table counts — they do not shrink as the list is filtered. When
+  // super admins are hidden they come out of these too, or the badges would
+  // count rows that are not on screen.
+  const total = (d?.total ?? 0) - hiddenSupers;
+  const byRole = useMemo(() => {
+    const b = d?.by_role || {};
+    if (iAmSuper || !hiddenSupers) return b;
+    const { super_admin: _hidden, ...rest } = b;
+    return rest;
+  }, [d, iAmSuper, hiddenSupers]);
 
   const reset = (fn) => (v) => { fn(v); setOffset(0); };
 
@@ -237,16 +289,19 @@ export default function Users() {
           roleName={roleName} roleBlurb={roleBlurb}
           onSave={async (body) => {
             const creating = form.mode === "create";
+            // The server generates a temporary password and emails it to the
+            // new user directly. It is deliberately NOT surfaced here: a
+            // password that reaches the admin's screen invites being passed on
+            // over chat, and the person who owns the account should be the one
+            // who sees it. If the mail never arrives, Password resets it.
             const res = await act(
               () => creating ? api.userOnboard(body) : api.userEdit(body),
-              creating ? `${body.email} onboarded as ${roleName(body.role)}` : "User updated"
+              creating
+                ? `${body.email} onboarded as ${roleName(body.role)} — an invite email is on its way`
+                : "User updated"
             );
             if (!res) return;                        // failed — keep the form open
             setForm(null);
-            // The server generates the password and returns it exactly once.
-            // Losing it here would strand the new user if the invite email
-            // does not arrive, so it is shown to the admin now.
-            if (creating && res.temp_password) setCreds({ email: body.email, password: res.temp_password });
           }} />
       )}
 
@@ -261,28 +316,6 @@ export default function Users() {
 
       {confirm && <Confirm {...confirm} onNo={() => setConfirm(null)} />}
 
-      {creds && (
-        <Modal title="Temporary password"
-          why="Shown once — it is not stored anywhere you can read it again. They must replace it at first sign-in."
-          onClose={() => setCreds(null)}
-          footer={<>
-            <button className="btn" onClick={() => {
-              navigator.clipboard?.writeText(`${creds.email} / ${creds.password}`).then(
-                () => say("Copied"), () => say("Could not copy — select it by hand", true));
-            }}>Copy</button>
-            <button className="btn pri" onClick={() => setCreds(null)}>Done</button>
-          </>}>
-          <div style={{ fontSize: 13, marginBottom: 10, color: "var(--ink-2)" }}>
-            An invite email is sent when the mail server is configured; this is the fallback if it
-            never arrives. Share it over something private — not a group chat.
-          </div>
-          {/* whiteSpace: .pre styles a <pre> elsewhere; on a div the newline
-              between email and password would otherwise collapse. */}
-          <div className="pre" style={{ fontFamily: "var(--mono)", fontSize: 14, userSelect: "all", whiteSpace: "pre-wrap" }}>
-            {creds.email}{"\n"}{creds.password}
-          </div>
-        </Modal>
-      )}
     </>
   );
 }

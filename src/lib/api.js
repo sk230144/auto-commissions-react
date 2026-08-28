@@ -71,7 +71,7 @@ export function clean(obj) {
   return out;
 }
 
-async function request(path, { method = "POST", body, signal } = {}) {
+async function request(path, { method = "POST", body, signal, quiet } = {}) {
   if (!BASE && !USE_PROXY) throw new ApiError("No API base URL configured — set VITE_API_BASE_URL in .env", 0);
 
   // Our own timeout, chained to any caller-supplied abort signal so a
@@ -119,7 +119,13 @@ async function request(path, { method = "POST", body, signal } = {}) {
     // 403 = the session is fine but this role lacks the page, which usually
     // means an admin just changed it — so the session is re-read, not ended.
     // The login call is exempt: its 401 is "wrong password", not a dead session.
-    if ((res.status === 401 || res.status === 403) && onUnauthorized && !path.startsWith("/auth/login")) {
+    //
+    // `quiet` opts a call out of the 403 half: some screens deliberately ask
+    // for something the role may not hold (a richer source, with a fallback
+    // ready). That 403 is an expected answer, not a permissions change, and
+    // re-reading the session on it would be noise.
+    if ((res.status === 401 || (res.status === 403 && !quiet))
+        && onUnauthorized && !path.startsWith("/auth/login")) {
       onUnauthorized(res.status, msg);
     }
     throw new ApiError(msg, res.status, json);
@@ -156,7 +162,9 @@ export const userSuspend = (id, opts) => post("/users/suspend", { id }, opts);
 export const userActivate = (id, opts) => post("/users/activate", { id }, opts);
 
 // ── Access control ──────────────────────────────────────────────────────────
-/** Roles, pages and grants — the whole matrix in one call. */
+/** Roles, pages and grants — the whole matrix in one call. Pass
+ *  `{ quiet: true }` where a 403 is an acceptable answer (User Management
+ *  reads it for role names but does not require Access Control). */
 export const accessMatrix = (opts) => post("/access/matrix", {}, opts);
 export const accessGrant = (role, page, allowed, opts) => post("/access/grant", { role, page, allowed }, opts);
 /** Replaces a role's entire row atomically — the All / None buttons. */
