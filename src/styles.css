@@ -390,13 +390,22 @@ input::placeholder{color:var(--ink-3);opacity:.8}
   background-size:44px 44px;
   -webkit-mask-image:radial-gradient(ellipse 90% 80% at 50% 45%, rgba(0,0,0,.5), transparent 78%);
           mask-image:radial-gradient(ellipse 90% 80% at 50% 45%, rgba(0,0,0,.5), transparent 78%)}
-/* Layer 2 — brand glows plus a rising commission line with milestone dots
-   (an inline SVG, mid-tone so it registers on both themes). */
+/* Layer 2 — brand glows, a rising commission line with milestone dots, and the
+   OWE mark (the ring + W from Logo.jsx) as a large watermark bleeding off the
+   right edge. All inline SVG, brand colours at watermark opacity. */
 .loginwrap::after{content:"";position:absolute;inset:0;pointer-events:none;
   background:
     url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" preserveAspectRatio="xMidYMax slice"><path d="M0 360 L140 322 L280 338 L420 262 L560 284 L700 200 L840 168 L980 96 L1200 44" fill="none" stroke="rgba(70,145,185,0.16)" stroke-width="2.5"/><g fill="rgba(70,145,185,0.22)"><circle cx="420" cy="262" r="4"/><circle cx="700" cy="200" r="4"/><circle cx="980" cy="96" r="4"/></g><g fill="rgba(150,190,80,0.2)"><circle cx="140" cy="322" r="4"/><circle cx="840" cy="168" r="4"/></g></svg>') bottom / 100% auto no-repeat,
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 39.504"><path d="m28.408 22.126v-3.591h5.5v-2.9h-5.5v-2.6h5.5v-2.845h-8.677v14.8h10.037a17.213 17.213 0 0 1 -32.943-7 16.862 16.862 0 0 1 .265-2.97h-2.371a19.546 19.546 0 0 0 38.421 7.118h-10.232z" fill="rgba(156,203,59,0.07)" transform="translate(0 1.539)"/><path d="m19.465 0a19.551 19.551 0 0 0 -18.935 14.687h5.57l4.961 13.341 3.775-9.738 3.856 9.738 6.043-16.276h-3.222l-3.062 8.023-3.58-8.08v-.023.023l-3.58 8.08-3.061-8.023h-4.109a17.212 17.212 0 0 1 32.563 7.793 18.075 18.075 0 0 1 -.15 2.245h2.348a20.613 20.613 0 0 0 .138-2.245 19.559 19.559 0 0 0 -19.555-19.545z" fill="rgba(4,147,206,0.08)" transform="translate(.08)"/></svg>') right -170px center / 560px auto no-repeat,
     radial-gradient(620px 460px at 10% 90%, rgba(3,107,150,.14), transparent 70%),
     radial-gradient(560px 400px at 90% 8%, rgba(156,203,59,.10), transparent 70%)}
+/* On a phone the card fills the width, so the half-cropped mark would only
+   peek out from behind it as noise — drop it and keep the grid and glows. */
+@media (max-width:640px){
+  .loginwrap::after{background:
+    radial-gradient(620px 460px at 10% 90%, rgba(3,107,150,.14), transparent 70%),
+    radial-gradient(560px 400px at 90% 8%, rgba(156,203,59,.10), transparent 70%)}
+}
 /* The card sits above the decoration. */
 .logincard{position:relative;z-index:1}
 .logincard{width:100%;max-width:392px;background:var(--panel);border:1px solid var(--line);
