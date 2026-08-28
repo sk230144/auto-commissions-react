@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Download, ArrowUp, ArrowDown, Plus } from "lucide-react";
+import { Search, Download, ArrowUp, ArrowDown, Plus, Upload } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload, trunc, toCents, today } from "../lib/fmt.js";
+import { moneyC, csvDownload, trunc, toCents, today, parseCsv } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Tip, Modal } from "../components/ui.jsx";
@@ -68,6 +68,7 @@ export default function Settings({ group }) {
   const { canWrite } = useAuth();
   const mayWrite = canWrite(rail === "rep" ? "rep" : "dealer");
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const [table, setTable] = useState("");
   const [showAll, setShowAll] = useState(false);
@@ -277,11 +278,14 @@ export default function Settings({ group }) {
             {d?.readonly && <Badge kind="mut">read-only</Badge>}
             {/* Writes are per-screen permissions, and the legacy archive
                 refuses inserts — the button only exists where a row can land. */}
-            {mayWrite && d && !d.readonly && (
+            {mayWrite && d && !d.readonly && (<>
+              <button className="btn sm" onClick={() => setImporting(true)}>
+                <Upload size={13} strokeWidth={2} />Bulk import
+              </button>
               <button className="btn sm pri" onClick={() => setAdding(true)}>
                 <Plus size={13} strokeWidth={2} />Add row
               </button>
-            )}
+            </>)}
             <div className="sp" />
             <label className="row" style={{ gap: 5, fontSize: 12.5, color: "var(--ink-3)" }}>
               <input type="checkbox" style={{ width: "auto" }} checked={showAll}
@@ -347,6 +351,12 @@ export default function Settings({ group }) {
           </div>
         </div>
       </div>
+
+      {importing && d && (
+        <BulkImportDialog rail={rail} table={activeTable} label={d.label} cols={cols}
+          onClose={() => setImporting(false)}
+          onDone={(n) => { setImporting(false); say(`${n} row${n === 1 ? "" : "s"} imported into ${d.label}`); rowsQ.reload(); tabsQ.reload(); }} />
+      )}
 
       {adding && d && (
         <AddRowDialog rail={rail} table={activeTable} label={d.label} cols={cols}
@@ -452,6 +462,221 @@ function AddRowDialog({ rail, table, label, cols, onClose, onSaved }) {
           </div>
         ))}
       </div>
+    </Modal>
+  );
+}
+
+
+/**
+ * Bulk import — CSV in, schema-validated preview, then import.
+ *
+ * There is no bulk endpoint (every variant 404s, and /rows rejects an array),
+ * so this posts through the single-row endpoint one request per row, with
+ * progress. When a real bulk endpoint ships, only submit() changes.
+ *
+ * The gate is strict: nothing is sent until EVERY row validates. These tables
+ * are append-only with no delete, so a half-imported sheet cannot be rolled
+ * back — better to refuse up front than to leave someone with 60 of 120 rows
+ * in and no way to unwind.
+ */
+function BulkImportDialog({ rail, table, label, cols, onClose, onDone }) {
+  const fields = cols.filter((c) => !["id", "void", "updated_by", "updated_at"].includes(c.name));
+  const byKey = new Map();
+  for (const c of fields) {
+    byKey.set(c.name.toLowerCase(), c);
+    if (c.label) byKey.set(String(c.label).toLowerCase(), c);
+  }
+
+  const [text, setText] = useState("");
+  const [phase, setPhase] = useState("edit");        // edit | busy | failed
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [failure, setFailure] = useState(null);      // { rowNo, message, inserted }
+
+  /** Header-only template, named for the tab. Headers are wire names. */
+  function template() {
+    const head = fields.map((c) => c.name).join(",") + "\n";
+    const url = URL.createObjectURL(new Blob([head], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `${table} template.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function onFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => setText(String(r.result || ""));
+    r.readAsText(f);
+    e.target.value = "";
+  }
+
+  // Parse + validate, recomputed as the text changes.
+  const parsed = (() => {
+    const t = text.trim();
+    if (!t) return null;
+    const grid = parseCsv(t);
+    if (grid.length < 2) return { fatal: "Need a header row and at least one data row." };
+
+    const heads = grid[0].map((h) => h.trim());
+    const mapped = heads.map((h) => byKey.get(h.toLowerCase()) || null);
+    const unknown = heads.filter((h, i) => h !== "" && !mapped[i]);
+    if (unknown.length) {
+      return { fatal: `Unknown column${unknown.length > 1 ? "s" : ""}: ${unknown.join(", ")}. Valid: ${fields.map((c) => c.name).join(", ")}.` };
+    }
+
+    const isRequired = (c) => c.required === true || c.name === "start_date";
+    const missing = fields.filter((c) => isRequired(c) && !mapped.some((m) => m?.name === c.name));
+    if (missing.length) {
+      return { fatal: `The sheet is missing required column${missing.length > 1 ? "s" : ""}: ${missing.map((c) => c.name).join(", ")}.` };
+    }
+
+    const rows = grid.slice(1).map((cells, idx) => {
+      const row = {}; const errs = [];
+      mapped.forEach((c, i) => {
+        if (!c) return;
+        const raw = (cells[i] ?? "").trim();
+        if (raw === "") {
+          if (isRequired(c)) errs.push(`${c.name} is required`);
+          return;                                    // blank -> omitted -> NULL
+        }
+        if (c.kind === "money") {
+          const cents = toCents(raw);
+          if (cents === null) errs.push(`${c.name}: "${raw}" is not an amount`);
+          else row[c.name] = cents;
+        } else if (c.kind === "int") {
+          if (!/^\d+$/.test(raw)) errs.push(`${c.name}: "${raw}" is not a whole number`);
+          else row[c.name] = parseInt(raw, 10);
+        } else if (c.kind === "date") {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) errs.push(`${c.name}: dates are YYYY-MM-DD`);
+          else row[c.name] = raw;
+        } else if (Array.isArray(c.choices) && c.choices.length
+            && !c.choices.some((o) => o.toLowerCase() === raw.toLowerCase())) {
+          errs.push(`${c.name}: "${raw}" is not one of ${c.choices.join("/")}`);
+        } else {
+          row[c.name] = raw;                        // text / decimal verbatim
+        }
+      });
+      if (row.end_date && row.start_date && row.end_date < row.start_date) {
+        errs.push("end_date is before start_date");
+      }
+      return { n: idx + 2, row, errs };             // n = line number in the sheet
+    });
+
+    const bad = rows.filter((r) => r.errs.length);
+    return { rows, bad };
+  })();
+
+  async function submit() {
+    setPhase("busy");
+    setProgress({ done: 0, total: parsed.rows.length });
+    let inserted = 0;
+    for (const r of parsed.rows) {
+      try {
+        await api.rateRowCreate(rail, table, r.row);
+        inserted++;
+        setProgress({ done: inserted, total: parsed.rows.length });
+      } catch (e) {
+        // Rows already sent are in for good (append-only, no delete) — say
+        // exactly where it stopped so the remainder can be re-imported.
+        setFailure({ rowNo: r.n, message: e.message, inserted });
+        setPhase("failed");
+        return;
+      }
+    }
+    onDone(inserted);
+  }
+
+  const canImport = phase === "edit" && parsed && !parsed.fatal && parsed.rows.length > 0 && parsed.bad.length === 0;
+
+  return (
+    <Modal wide title={`Bulk import — ${label}`}
+      why="Paste or upload a CSV whose headers are the column names below (the template has them). Blank cells stay blank — on these tables an empty cell is meaningful, not zero."
+      onClose={phase === "busy" ? () => {} : onClose}
+      footer={<>
+        {phase === "edit" && parsed && !parsed.fatal && (
+          <span className="submeta" style={{ marginRight: "auto", color: parsed.bad.length ? "var(--held)" : "var(--ink-3)" }}>
+            {parsed.rows.length} row{parsed.rows.length === 1 ? "" : "s"}
+            {parsed.bad.length ? ` — ${parsed.bad.length} with problems; fix or remove them to import` : " — all valid"}
+          </span>
+        )}
+        {phase === "busy" && (
+          <span className="submeta" style={{ marginRight: "auto" }}>
+            Importing {progress.done} of {progress.total}…
+          </span>
+        )}
+        <button className="btn" disabled={phase === "busy"} onClick={onClose}>
+          {phase === "failed" ? "Close" : "Cancel"}
+        </button>
+        <button className="btn pri" disabled={!canImport} onClick={submit}>
+          {phase === "busy" ? `Importing ${progress.done}/${progress.total}…` : "Import"}
+        </button>
+      </>}>
+
+      {phase === "failed" && failure && (
+        <div className="errstate" style={{ textAlign: "left", padding: "12px 14px", background: "var(--held-bg)", borderRadius: 10, marginBottom: 14 }}>
+          <div className="errstate-h" style={{ marginBottom: 3 }}>Stopped at sheet line {failure.rowNo}</div>
+          <div className="errstate-m" style={{ margin: 0 }}>
+            {failure.message} — the first {failure.inserted} row{failure.inserted === 1 ? " was" : "s were"} already
+            added and cannot be undone. Fix the sheet from line {failure.rowNo} and import the remainder.
+          </div>
+        </div>
+      )}
+
+      <div className="row" style={{ marginBottom: 10, gap: 8 }}>
+        <button className="btn sm" onClick={template}><Download size={13} strokeWidth={2} />Download template</button>
+        <label className="btn sm" style={{ cursor: "pointer" }}>
+          <Upload size={13} strokeWidth={2} />Choose CSV file
+          <input type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={onFile} />
+        </label>
+      </div>
+
+      <textarea rows={8} value={text} disabled={phase === "busy"}
+        placeholder={"Paste CSV here — first row is the headers, e.g.\n" + fields.slice(0, 5).map((c) => c.name).join(",") + ",…"}
+        onChange={(e) => { setText(e.target.value); setPhase("edit"); setFailure(null); }}
+        style={{ fontFamily: "var(--mono)", fontSize: 12 }} />
+
+      {parsed?.fatal && (
+        <div className="submeta" style={{ color: "var(--held)", marginTop: 8 }}>{parsed.fatal}</div>
+      )}
+
+      {parsed && !parsed.fatal && parsed.bad.length > 0 && (
+        <>
+          <div className="sect">Problems</div>
+          <div className="tblwrap" style={{ maxHeight: 180 }}>
+            <table>
+              <thead><tr><th>Sheet line</th><th>What is wrong</th></tr></thead>
+              <tbody>
+                {parsed.bad.slice(0, 20).map((r) => (
+                  <tr key={r.n}><td className="num">{r.n}</td><td style={{ color: "var(--held)" }}>{r.errs.join("; ")}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {parsed.bad.length > 20 && <div className="submeta" style={{ marginTop: 6 }}>…and {parsed.bad.length - 20} more.</div>}
+        </>
+      )}
+
+      {parsed && !parsed.fatal && parsed.bad.length === 0 && parsed.rows.length > 0 && (
+        <>
+          <div className="sect">Preview — first {Math.min(5, parsed.rows.length)} of {parsed.rows.length}</div>
+          <div className="tblwrap" style={{ maxHeight: 200 }}>
+            <table>
+              <thead><tr>{fields.filter((c) => parsed.rows.some((r) => c.name in r.row)).map((c) => (
+                <th key={c.name}>{c.label || c.name}</th>
+              ))}</tr></thead>
+              <tbody>
+                {parsed.rows.slice(0, 5).map((r) => (
+                  <tr key={r.n}>
+                    {fields.filter((c) => parsed.rows.some((x) => c.name in x.row)).map((c) => (
+                      <td key={c.name} className={isNum(c.kind) ? "r" : ""}><Cell col={c} value={r.row[c.name]} /></td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

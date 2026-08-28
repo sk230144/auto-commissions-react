@@ -35,6 +35,35 @@ export const pct = (n) => Math.round((Number(n) || 0) * 100) + "%";
 export const trunc = (s, n) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + "…" : s; };
 export const today = () => new Date().toISOString().slice(0, 10);
 
+/**
+ * Quote-aware CSV → array of rows. Handles quoted fields, "" escapes, commas
+ * and newlines inside quotes, and CRLF. Deliberately small — it reads sheets
+ * exported from Excel/Sheets, not arbitrary dialects.
+ */
+export function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = "", inQ = false;
+  const s = String(text ?? "");
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (s[i + 1] === '"') { cell += '"'; i++; }
+        else inQ = false;
+      } else cell += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && s[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      rows.push(row); row = [];
+    } else cell += ch;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  // Trailing blank lines are noise, not rows.
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
 /** OWASP CSV-injection defence — a cell that would execute as a formula gets quoted. */
 function csvCell(v) {
   let s = String(v ?? "");
