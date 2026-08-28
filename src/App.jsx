@@ -214,17 +214,38 @@ function AppShell() {
  * business is on screen before someone identifies themselves.
  */
 export default function App() {
-  const { me, booting, mustChangePassword } = useAuth();
+  const { me, booting, mustChangePassword, allowed } = useAuth();
+  const loc = useLocation();
 
   // A stored token is being checked. Showing the login screen here would flash
   // it at someone who is already signed in.
   if (booting) {
     return <div className="loginwrap"><div className="bootspin" aria-label="Loading" /></div>;
   }
-  if (!me) return <Login />;
+
+  if (!me) {
+    // Signed out, the URL must say /login rather than keeping whatever page
+    // the user was on. Where they were is carried in state so signing in
+    // returns them there instead of dumping them on the default page.
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />} />
+      </Routes>
+    );
+  }
+
   // A temporary password is known to whoever issued it, so nothing else
   // renders until it has been replaced.
   if (mustChangePassword) return <ChangePassword />;
+
+  // Signed in, /login is not a page — send them back where they were headed,
+  // or to the first page their role can actually reach.
+  if (loc.pathname === "/login") {
+    const home = "/" + (allowed[0] || "pipeline");
+    const from = loc.state?.from;
+    return <Navigate to={from && from !== "/login" ? from : home} replace />;
+  }
   return <AppShell />;
 }
 
@@ -248,7 +269,7 @@ function Guard({ k, children }) {
                 Your role does not include it. An administrator can grant it in Access Control.
               </div>
               {allowed.length > 0 && (
-                <a className="btn sm pri" href={"#/" + allowed[0]} style={{ marginTop: 12 }}>
+                <a className="btn sm pri" href={"/" + allowed[0]} style={{ marginTop: 12 }}>
                   Go to {PAGE_LABEL[allowed[0]] || allowed[0]}
                 </a>
               )}

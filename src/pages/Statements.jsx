@@ -97,7 +97,7 @@ export default function Statements() {
                     {rows.map((g) => (
                       <tr key={g.party}>
                         <td>
-                          <a href={`#/stmt/${encodeURIComponent(g.party)}`}
+                          <a href={`/stmt/${encodeURIComponent(g.party)}`}
                             onClick={(e) => { e.preventDefault(); nav(`/stmt/${encodeURIComponent(g.party)}`); }}>
                             {g.party}
                           </a>
