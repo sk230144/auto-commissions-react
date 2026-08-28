@@ -56,6 +56,9 @@ export const PAGES = [
   { key: "payout_logic", route: "logic", label: "Payout Logic", group: "Rate cards" },
   { key: "manual_payments", route: "push", label: "Manual Payments", group: "Operations" },
   { key: "open_items", route: "review", label: "Open Items", group: "Operations" },
+  // Rate Gaps has no permission key of its own — the server gates /rate-gaps
+  // under open_items (verified: an approver gets "cannot reach Open Items").
+  { key: "open_items", route: "gaps", label: "Rate Gaps", group: "Operations" },
   { key: "tickets", route: "tickets", label: "Tickets", group: "Operations" },
   { key: "user_management", route: "users", label: "User Management", group: "Admin" },
   { key: "access_control", route: "access", label: "Access Control", group: "Admin" },

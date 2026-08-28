@@ -27,6 +27,7 @@ export default function Users() {
   const [offset, setOffset] = useState(0);
   const [form, setForm] = useState(null);
   const [pwFor, setPwFor] = useState(null);
+  const [creds, setCreds] = useState(null);   // {email, password} — shown once after onboarding
   const [confirm, setConfirm] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -61,13 +62,15 @@ export default function Users() {
   async function act(fn, okMsg) {
     setBusy(true);
     try {
-      await fn();
+      const res = await fn();
       say(okMsg);
       listQ.reload();
       // A role or status change can affect the signed-in user's own access.
       refresh();
+      return res ?? { ok: true };
     } catch (e) {
       say(e.message, true);
+      return undefined;          // the caller keeps its dialog open on failure
     } finally {
       setBusy(false);
     }
@@ -214,10 +217,19 @@ export default function Users() {
       {form && (
         <UserDialog form={form} setForm={setForm} roles={roles} busy={busy}
           roleName={roleName} roleBlurb={roleBlurb}
-          onSave={(body) => act(
-            () => form.mode === "create" ? api.userOnboard(body) : api.userEdit(body),
-            form.mode === "create" ? `${body.email} onboarded as ${roleName(body.role)}` : "User updated"
-          ).then(() => setForm(null))} />
+          onSave={async (body) => {
+            const creating = form.mode === "create";
+            const res = await act(
+              () => creating ? api.userOnboard(body) : api.userEdit(body),
+              creating ? `${body.email} onboarded as ${roleName(body.role)}` : "User updated"
+            );
+            if (!res) return;                        // failed — keep the form open
+            setForm(null);
+            // The server generates the password and returns it exactly once.
+            // Losing it here would strand the new user if the invite email
+            // does not arrive, so it is shown to the admin now.
+            if (creating && res.temp_password) setCreds({ email: body.email, password: res.temp_password });
+          }} />
       )}
 
       {pwFor && (
@@ -230,6 +242,29 @@ export default function Users() {
       )}
 
       {confirm && <Confirm {...confirm} onNo={() => setConfirm(null)} />}
+
+      {creds && (
+        <Modal title="Temporary password"
+          why="Shown once — it is not stored anywhere you can read it again. They must replace it at first sign-in."
+          onClose={() => setCreds(null)}
+          footer={<>
+            <button className="btn" onClick={() => {
+              navigator.clipboard?.writeText(`${creds.email} / ${creds.password}`).then(
+                () => say("Copied"), () => say("Could not copy — select it by hand", true));
+            }}>Copy</button>
+            <button className="btn pri" onClick={() => setCreds(null)}>Done</button>
+          </>}>
+          <div style={{ fontSize: 13, marginBottom: 10, color: "var(--ink-2)" }}>
+            An invite email is sent when the mail server is configured; this is the fallback if it
+            never arrives. Share it over something private — not a group chat.
+          </div>
+          {/* whiteSpace: .pre styles a <pre> elsewhere; on a div the newline
+              between email and password would otherwise collapse. */}
+          <div className="pre" style={{ fontFamily: "var(--mono)", fontSize: 14, userSelect: "all", whiteSpace: "pre-wrap" }}>
+            {creds.email}{"\n"}{creds.password}
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

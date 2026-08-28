@@ -3,7 +3,7 @@ import { Routes, Route, NavLink, Navigate, useLocation } from "react-router-dom"
 import {
   LayoutGrid, Clock, CircleCheck, FileText, TrendingUp, Receipt, PauseCircle,
   ArrowLeftRight, SlidersHorizontal, Percent, FunctionSquare, Send, CircleAlert,
-  MessageSquare, KeyRound, PanelLeftClose, PanelLeftOpen, Sun, Moon, Menu, Users2, LogOut,
+  MessageSquare, KeyRound, PanelLeftClose, PanelLeftOpen, Sun, Moon, Menu, Users2, LogOut, SearchX,
 } from "lucide-react";
 import { useStore } from "./lib/store.jsx";
 import { useTheme } from "./lib/theme.js";
@@ -24,6 +24,7 @@ import Settings from "./pages/Settings.jsx";
 import Logic from "./pages/Logic.jsx";
 import Pushes from "./pages/Pushes.jsx";
 import Review from "./pages/Review.jsx";
+import RateGaps from "./pages/RateGaps.jsx";
 import Tickets from "./pages/Tickets.jsx";
 import Access from "./pages/Access.jsx";
 import UsersPage from "./pages/Users.jsx";
@@ -102,6 +103,7 @@ function AppShell() {
     { grp: "Operations", items: [
       { k: "push",    Ic: Send,          label: "Manual Payments" },
       { k: "review",  Ic: CircleAlert,   label: "Open Items", n: badge.review },
+      { k: "gaps",    Ic: SearchX,       label: "Rate Gaps" },
       { k: "tickets", Ic: MessageSquare, label: "Tickets" },
     ]},
     { grp: "Admin", items: [
@@ -205,6 +207,7 @@ function AppShell() {
           <Route path="/logic"    element={<Guard k="logic"><Logic /></Guard>} />
           <Route path="/push"     element={<Guard k="push"><Pushes /></Guard>} />
           <Route path="/review"   element={<Guard k="review"><Review /></Guard>} />
+          <Route path="/gaps"     element={<Guard k="gaps"><RateGaps /></Guard>} />
           <Route path="/tickets"  element={<Guard k="tickets"><Tickets /></Guard>} />
           <Route path="/users"    element={<Guard k="users"><UsersPage /></Guard>} />
           <Route path="/access"   element={<Guard k="access"><Access /></Guard>} />
