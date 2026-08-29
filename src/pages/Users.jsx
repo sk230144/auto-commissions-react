@@ -309,7 +309,12 @@ export default function Users() {
         <PasswordDialog user={pwFor} busy={busy} onCancel={() => setPwFor(null)}
           onOk={(pw) => {
             const u = pwFor; setPwFor(null);
-            act(() => api.userSetPassword(u.id, pw),
+            // Your own row goes through the self endpoint. The admin one does
+            // handle "yourself" correctly today (it skips the
+            // must_change_password stamp), but that is its courtesy, not its
+            // job: changing your own password is what /auth/change-password is
+            // for, and it needs no permission to work.
+            act(() => u.you ? api.authChangePassword(pw) : api.userSetPassword(u.id, pw),
               u.you ? "Password changed" : "Password reset — they must choose a new one at next sign-in");
           }} />
       )}

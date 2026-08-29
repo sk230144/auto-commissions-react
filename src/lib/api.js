@@ -155,9 +155,20 @@ export const authMe = (opts) => get("/auth/me", opts);
 export const usersList = (body, opts) => post("/users/list", clean(body), opts);
 export const userOnboard = (body, opts) => post("/users/onboard", clean(body), opts);
 export const userEdit = (body, opts) => post("/users/edit", clean(body), opts);
-/** On yourself this clears must_change_password; on someone else it SETS it,
- *  so an admin reset forces them to choose their own on next sign-in. */
+/** Reset SOMEONE ELSE's password — the User Management screen's Password
+ *  button. Sets must_change_password, so they must choose their own next time.
+ *
+ *  This is admin-only (it lives behind the User Management permission), and it
+ *  takes an `id`, so it must never be used for "change my own password": an
+ *  ordinary user calling it gets a 403. Use `authChangePassword` for self. The
+ *  split is deliberate — if self-service went through this endpoint, anyone
+ *  could put someone else's id in the body. */
 export const userSetPassword = (id, new_password, opts) => post("/users/set-password", { id, new_password }, opts);
+/** Change YOUR OWN password. Available to every signed-in user, and takes no
+ *  id at all — the server always changes the caller's, which is what makes it
+ *  safe to expose. Also clears must_change_password on the current token, so
+ *  the forced first-login screen can hand straight over to the app. */
+export const authChangePassword = (new_password, opts) => post("/auth/change-password", { new_password }, opts);
 export const userSuspend = (id, opts) => post("/users/suspend", { id }, opts);
 export const userActivate = (id, opts) => post("/users/activate", { id }, opts);
 

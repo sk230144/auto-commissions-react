@@ -29,7 +29,15 @@ export default function ChangePassword() {
     setBusy(true);
     setError("");
     try {
-      await api.userSetPassword(me.id, pw);
+      // Self-service, so this is /auth/change-password — NOT /users/set-password,
+      // which is admin-only and takes an id. This screen is shown to whoever
+      // has a temporary password, which is usually not an admin: the admin
+      // endpoint 403s for them ("Your role (Operations) cannot reach User
+      // Management") and strands them on the one screen they must get past.
+      // The server always changes the caller's own password and clears
+      // must_change_password on the current token, so refresh() below is
+      // enough to hand over to the app.
+      await api.authChangePassword(pw);
       await refresh();
     } catch (err) {
       setError(err.message);
