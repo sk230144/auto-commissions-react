@@ -566,9 +566,25 @@ input::placeholder{color:var(--ink-3);opacity:.8}
 .filterwrap{position:relative;display:inline-flex}
 /* Portaled to <body> with fixed inline coords from FilterPanel — never
    position it here, or the card's overflow:hidden clips it again. */
+/* Header and actions stay put; only the groups scroll — so Apply is always
+   reachable without scrolling to the bottom of a long facet list. */
 .filterpop{position:fixed;z-index:40;width:280px;max-height:min(560px,70vh);
-  overflow-y:auto;background:var(--panel);border:1px solid var(--line-2);border-radius:12px;
-  box-shadow:var(--shadow-lg,0 12px 32px rgba(0,0,0,.18));padding:14px;display:flex;flex-direction:column;gap:14px}
+  background:var(--panel);border:1px solid var(--line-2);border-radius:12px;
+  box-shadow:var(--shadow-lg,0 12px 32px rgba(0,0,0,.18));display:flex;flex-direction:column;overflow:hidden}
+.filterpop-h{flex:0 0 auto;display:flex;align-items:baseline;gap:8px;padding:11px 14px;
+  border-bottom:1px solid var(--line);font-size:11px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-3)}
+.fpop-n{margin-left:auto;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+  text-transform:none;color:var(--pri)}
+.filterpop-b{flex:1 1 auto;min-height:0;overflow-y:auto;padding:14px;
+  display:flex;flex-direction:column;gap:14px}
+
+/* The applied-filters dot on the + Filter button, and the one-click clear
+   beside it — so "filtered" reads as shape and position, not colour alone. */
+.fdot{width:6px;height:6px;border-radius:50%;background:currentColor;
+  margin-left:1px;align-self:flex-start;margin-top:1px;flex:0 0 auto}
+.fclear{margin-left:-4px;padding:6px 7px;color:var(--ink-2)}
+.fclear:hover{color:var(--held);border-color:var(--held)}
 .fg-h{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:7px}
 .fg-list{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:9px;padding:4px}
 .fg-list.scroll{max-height:150px;overflow-y:auto}
@@ -585,7 +601,8 @@ input::placeholder{color:var(--ink-3);opacity:.8}
 .fg-dates{display:flex;align-items:center;gap:8px}
 .fg-dates input{flex:1;min-width:0}
 .fg-dates span{color:var(--ink-3);font-size:12px;flex:0 0 auto}
-.fg-actions{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.fg-actions{flex:0 0 auto;display:flex;justify-content:flex-end;gap:8px;
+  border-top:1px solid var(--line);padding:12px 14px;background:var(--panel)}
 
 /* ── tiles ────────────────────────────────────────────────────────────────── */
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:10px}

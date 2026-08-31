@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Filter } from "lucide-react";
+import { Filter, X } from "lucide-react";
 
 /** Below this the popover is a bottom sheet, positioned by CSS alone —
  *  keep in step with the @media (max-width:560px) block in styles.css. */
@@ -50,9 +50,18 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
     if (window.matchMedia(SHEET).matches) { setPos({}); return; }
     const r = ref.current?.getBoundingClientRect();
     if (!r) return;
+    const M = 12;                                  // breathing room at the edges
+    const below = window.innerHeight - r.bottom - 8 - M;
+    const above = r.top - 8 - M;
+    // Prefer opening downward, but flip above the button when that leaves more
+    // room — otherwise the pinned Apply row can land under the viewport edge.
+    const flip = below < 260 && above > below;
     setPos({
-      top: r.bottom + 8,
-      left: Math.max(12, Math.min(r.left, window.innerWidth - 280 - 12)),
+      ...(flip ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 }),
+      left: Math.max(M, Math.min(r.left, window.innerWidth - 280 - M)),
+      // Cap to the space actually available, so the body scrolls instead of
+      // the panel running off-screen.
+      maxHeight: Math.max(220, flip ? above : below),
     });
   };
 
@@ -100,9 +109,26 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
         title={disabled ? disabledReason : undefined}
         onClick={() => setOpen((o) => !o)}>
         <Filter size={14} strokeWidth={2} />+ Filter{count > 0 ? ` (${count})` : ""}
+        {/* A dot as well as the count and the filled button: three signals, so
+            "filtered" is never carried by colour alone. */}
+        {count > 0 && <span className="fdot" aria-hidden="true" />}
       </button>
+      {/* Clearing is the common next action after filtering, and needing to
+          open the panel to reach Clear made it a three-click job. */}
+      {count > 0 && !disabled && (
+        <button className="btn fclear" onClick={clear}
+          title={`Clear ${count} filter${count === 1 ? "" : "s"}`}
+          aria-label={`Clear ${count} filter${count === 1 ? "" : "s"}`}>
+          <X size={13} strokeWidth={2.4} />
+        </button>
+      )}
       {open && !disabled && pos && createPortal(
         <div className="filterpop" ref={popRef} style={pos}>
+          <div className="filterpop-h">
+            <span>Filter</span>
+            {count > 0 && <span className="fpop-n">{count} applied</span>}
+          </div>
+          <div className="filterpop-b">
           {groups.map((g) => (
             <div className="fg" key={g.key}>
               <div className="fg-h">{g.label}</div>
@@ -146,6 +172,7 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
               </div>
             </div>
           )}
+          </div>
 
           <div className="fg-actions">
             <button className="btn gho sm" onClick={clear}>Clear</button>
