@@ -130,34 +130,7 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
           </div>
           <div className="filterpop-b">
           {groups.map((g) => (
-            <div className="fg" key={g.key}>
-              <div className="fg-h">{g.label}</div>
-
-              {/* Where the tick list covers only part of the data, a free-text
-                  box is the only way to reach a value that is not offered. */}
-              {g.contains && (
-                <input className="fg-contains" placeholder={`Any ${g.label.toLowerCase()} containing…`}
-                  value={draft[`${g.key}~`] || ""}
-                  onChange={(e) => setDraft({ ...draft, [`${g.key}~`]: e.target.value })} />
-              )}
-
-              <div className={"fg-list" + (g.scroll === false ? "" : " scroll")}>
-                {/* Distinguishes "this field is blank on every row" from "no rows
-                    loaded at all" — the panel is disabled entirely in the latter case. */}
-                {g.options.length === 0 && <div className="fg-empty">No {g.label.toLowerCase()} recorded on any row.</div>}
-                {g.options.map((o) => (
-                  <label className="fg-opt" key={o.value}>
-                    <input type="checkbox" checked={(draft[g.key] || []).includes(o.value)}
-                      onChange={() => toggle(g.key, o.value)} />
-                    <span>{o.value}</span>
-                    <span className="fg-n">({o.count})</span>
-                  </label>
-                ))}
-              </div>
-
-              {/* Never let a partial list pass for the whole set. */}
-              {g.note && <div className="fg-note">{g.note}</div>}
-            </div>
+            <Group key={g.key} g={g} draft={draft} setDraft={setDraft} onToggle={toggle} />
           ))}
 
           {dateRange && (
@@ -181,6 +154,89 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
         </div>,
         document.body
       )}
+    </div>
+  );
+}
+
+/** Above this many options a group gets its own search box. Set above the
+ *  ~15 of a states list, which one flick of the scrollbar covers — a box there
+ *  is clutter. The dealer/payee lists (190+) are the case this exists for. */
+const SEARCHABLE = 24;
+
+/**
+ * One checkbox group. Its own component so each keeps its own search text
+ * without re-rendering the rest of the panel as you type.
+ *
+ * Two different boxes can appear here, and they do different jobs:
+ *   · `search` (this one) narrows the ticks ALREADY on offer — purely local,
+ *     never sent anywhere.
+ *   · `contains` (g.contains) sends a substring to the SERVER, which is the
+ *     only way to reach a value the facet list does not offer at all.
+ * A group can have both, so the search box says "in this list" to keep them
+ * apart.
+ */
+function Group({ g, draft, setDraft, onToggle }) {
+  const [find, setFind] = useState("");
+  const picked = draft[g.key] || [];
+  const searchable = g.options.length > SEARCHABLE;
+
+  const needle = find.trim().toLowerCase();
+  const shown = needle
+    ? g.options.filter((o) => String(o.value).toLowerCase().includes(needle))
+    : g.options;
+
+  // A tick that the search hides is still applied, and un-ticking it would
+  // otherwise mean clearing the box to find it again — so pinned to the top.
+  const hiddenPicks = needle ? picked.filter((v) => !shown.some((o) => o.value === v)) : [];
+
+  return (
+    <div className="fg">
+      <div className="fg-h">
+        {g.label}
+        {picked.length > 0 && <span className="fg-picked">{picked.length}</span>}
+      </div>
+
+      {/* Where the tick list covers only part of the data, a free-text
+          box is the only way to reach a value that is not offered. */}
+      {g.contains && (
+        <input className="fg-contains" placeholder={`Any ${g.label.toLowerCase()} containing…`}
+          value={draft[`${g.key}~`] || ""}
+          onChange={(e) => setDraft({ ...draft, [`${g.key}~`]: e.target.value })} />
+      )}
+
+      {searchable && (
+        <input className="fg-find" type="search" placeholder={`Search ${g.options.length} in this list…`}
+          value={find} onChange={(e) => setFind(e.target.value)} />
+      )}
+
+      <div className={"fg-list" + (g.scroll === false ? "" : " scroll")}>
+        {/* Distinguishes "this field is blank on every row" from "no rows
+            loaded at all" — the panel is disabled entirely in the latter case. */}
+        {g.options.length === 0 && <div className="fg-empty">No {g.label.toLowerCase()} recorded on any row.</div>}
+
+        {hiddenPicks.map((v) => (
+          <label className="fg-opt sel" key={`pick-${v}`}>
+            <input type="checkbox" checked onChange={() => onToggle(g.key, v)} />
+            <span>{v}</span>
+            <span className="fg-n">ticked</span>
+          </label>
+        ))}
+
+        {g.options.length > 0 && shown.length === 0 && (
+          <div className="fg-empty">Nothing matches “{find.trim()}”.</div>
+        )}
+        {shown.map((o) => (
+          <label className="fg-opt" key={o.value}>
+            <input type="checkbox" checked={picked.includes(o.value)}
+              onChange={() => onToggle(g.key, o.value)} />
+            <span>{o.value}</span>
+            <span className="fg-n">({o.count})</span>
+          </label>
+        ))}
+      </div>
+
+      {/* Never let a partial list pass for the whole set. */}
+      {g.note && <div className="fg-note">{g.note}</div>}
     </div>
   );
 }
