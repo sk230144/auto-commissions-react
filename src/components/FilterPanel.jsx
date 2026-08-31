@@ -1,5 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Filter } from "lucide-react";
+
+/** Below this the popover is a bottom sheet, positioned by CSS alone —
+ *  keep in step with the @media (max-width:560px) block in styles.css. */
+const SHEET = "(max-width:560px)";
 
 /**
  * A reusable "+ Filter" popover: checkbox groups with counts, an optional
@@ -15,16 +20,52 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const ref = useRef(null);
+  const popRef = useRef(null);
+  const [pos, setPos] = useState(null);
 
   useEffect(() => { if (open) setDraft(value); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    // The popover lives in a portal, so "outside" means outside BOTH the
+    // button and the panel — the panel is no longer a child of the wrapper.
+    const onDoc = (e) => {
+      if (ref.current?.contains(e.target) || popRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     const onEsc = (e) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDoc);
     window.addEventListener("keydown", onEsc);
     return () => { document.removeEventListener("mousedown", onDoc); window.removeEventListener("keydown", onEsc); };
+  }, [open]);
+
+  /**
+   * Fixed-position coordinates, anchored under the button. The panel used to
+   * be position:absolute inside the card — but .card clips its overflow for
+   * the rounded corners, so on a short table the popover was cut off at the
+   * card's edge. A portal to <body> with fixed coords escapes every clip.
+   * On phones the CSS bottom-sheet rules take over and no coords are set.
+   */
+  const place = () => {
+    if (window.matchMedia(SHEET).matches) { setPos({}); return; }
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    setPos({
+      top: r.bottom + 8,
+      left: Math.max(12, Math.min(r.left, window.innerWidth - 280 - 12)),
+    });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    place();
+    window.addEventListener("resize", place);
+    // Capture-phase, so scrolling any ancestor container re-anchors it too.
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
   }, [open]);
 
   function toggle(gkey, v) {
@@ -60,8 +101,8 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
         onClick={() => setOpen((o) => !o)}>
         <Filter size={14} strokeWidth={2} />+ Filter{count > 0 ? ` (${count})` : ""}
       </button>
-      {open && !disabled && (
-        <div className="filterpop">
+      {open && !disabled && pos && createPortal(
+        <div className="filterpop" ref={popRef} style={pos}>
           {groups.map((g) => (
             <div className="fg" key={g.key}>
               <div className="fg-h">{g.label}</div>
@@ -110,7 +151,8 @@ export default function FilterPanel({ groups, dateRange, value, onApply, count =
             <button className="btn gho sm" onClick={clear}>Clear</button>
             <button className="btn pri sm" onClick={apply}>Apply</button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
