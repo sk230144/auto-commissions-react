@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Search, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload } from "../lib/fmt.js";
+import { moneyC, csvDownload, num } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Async, TableSkeleton, Pager, SortTh } from "../components/ui.jsx";
@@ -53,7 +53,7 @@ export default function Statements() {
   }
 
   const countLine = q1.loading ? "loading…" : q1.error ? "—"
-    : `${(t?.jobs ?? 0).toLocaleString()} jobs · net due ${moneyC(t?.net_due_cents ?? 0)}`;
+    : `${num(t?.jobs ?? 0)} jobs · net due ${moneyC(t?.net_due_cents ?? 0)}`;
 
   return (
     <>
@@ -69,7 +69,7 @@ export default function Statements() {
           Earned minus settled is the net due. A negative net due means the party owes OWE —
           usually a deduction or a project that regressed after payment.
           {run && <>
-            {" "}Engine run {String(run.run_at).slice(0, 10)} · {(run.lines ?? 0).toLocaleString()} lines · {run.source}.
+            {" "}Engine run {String(run.run_at).slice(0, 10)} · {num(run.lines ?? 0)} lines · {run.source}.
             {staleRun && <b style={{ color: "var(--pend)" }}> This run is over a day old — figures may be stale.</b>}
           </>}
         </div>
@@ -109,7 +109,7 @@ export default function Statements() {
                             {g.party}
                           </a>
                         </td>
-                        <td className="r num">{g.jobs.toLocaleString()}</td>
+                        <td className="r num">{num(g.jobs)}</td>
                         <td className="r num">{moneyC(g.earned_cents)}</td>
                         <td className="r num">{moneyC(g.settled_cents)}</td>
                         <td className="r num">
@@ -120,8 +120,8 @@ export default function Statements() {
                     {/* Totals are the whole set, not this page — labelled so. */}
                     {t && (
                       <tr>
-                        <td><b>All {(total || 0).toLocaleString()} parties</b></td>
-                        <td className="r num"><b>{(t.jobs ?? 0).toLocaleString()}</b></td>
+                        <td><b>All {num(total || 0)} parties</b></td>
+                        <td className="r num"><b>{num(t.jobs ?? 0)}</b></td>
                         <td className="r num"><b>{moneyC(t.earned_cents)}</b></td>
                         <td className="r num"><b>{moneyC(t.settled_cents)}</b></td>
                         <td className="r num"><b>{moneyC(t.net_due_cents)}</b></td>

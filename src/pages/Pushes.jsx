@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, Plus } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, toCents, trunc } from "../lib/fmt.js";
+import { moneyC, toCents, trunc, num } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Modal, Confirm, SortTh } from "../components/ui.jsx";
@@ -78,7 +78,7 @@ export default function Pushes() {
     <>
       <PageHead eyebrow={eco === "rep" ? "Sales Rep Pay" : "Dealer Pay"} title="Manual Payments"
         count={listQ.loading ? "loading…" : listQ.error ? "—"
-          : `${(d?.pending_count ?? 0).toLocaleString()} awaiting sign-off`}>
+          : `${num(d?.pending_count ?? 0)} awaiting sign-off`}>
         <button className="btn pri" onClick={() => setForm({
           our: "", party: "", kind: "other", amount: "", reason: "", funded_by: "",
         })}>
@@ -97,7 +97,7 @@ export default function Pushes() {
         <div className="card">
           <div className="card-h">
             <h2>Awaiting sign-off</h2>
-            {d && <span className="count">{(d.pending_count ?? 0).toLocaleString()}</span>}
+            {d && <span className="count">{num(d.pending_count ?? 0)}</span>}
           </div>
           <div className="card-b flush">
             <Async q={listQ} what="manual payments" isEmpty={!pending.length}
@@ -155,7 +155,7 @@ export default function Pushes() {
         <div className="card">
           <div className="card-h">
             <h2>History</h2>
-            {d && <span className="count">{(d.history_count ?? 0).toLocaleString()}</span>}
+            {d && <span className="count">{num(d.history_count ?? 0)}</span>}
             <div className="sp" />
             <div className="seg">
               {["", "approved", "cancelled"].map((s) => (

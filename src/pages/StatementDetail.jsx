@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Download } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload } from "../lib/fmt.js";
+import { moneyC, csvDownload, num } from "../lib/fmt.js";
 import { useApi } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Async, TableSkeleton, Pager, Badge, SortTh } from "../components/ui.jsx";
@@ -72,7 +72,7 @@ export default function StatementDetail() {
 
   const countLine = linesQ.loading || sumQ.loading ? "loading…"
     : linesQ.error ? "—"
-    : `${total.toLocaleString()} line${total === 1 ? "" : "s"}`
+    : `${num(total)} line${total === 1 ? "" : "s"}`
       + (sumQ.error ? "" : ` · ${moneyC(earned)} outstanding`);
 
   return (

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Search, UserPlus, KeyRound } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { csvDownload, today } from "../lib/fmt.js";
+import { csvDownload, today, num } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
@@ -145,7 +145,7 @@ export default function Users() {
     <>
       <PageHead eyebrow="Admin" title="User Management"
         count={listQ.loading ? "loading…" : listQ.error ? "—"
-          : `${total.toLocaleString()} user${total === 1 ? "" : "s"}`}>
+          : `${num(total)} user${total === 1 ? "" : "s"}`}>
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>Export CSV</button>
         {mayWrite && (
           <button className="btn pri" onClick={() => setForm({

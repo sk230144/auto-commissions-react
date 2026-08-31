@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Search, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload, trunc } from "../lib/fmt.js";
+import { moneyC, csvDownload, trunc, num, numD } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Tip, SortTh } from "../components/ui.jsx";
@@ -87,7 +87,7 @@ export default function Pipeline() {
   const kw = ((s?.total_watts ?? 0) / 1000);
   const countLine = sumQ.loading ? "loading…"
     : sumQ.error ? "—"
-    : `${(s?.projects ?? 0).toLocaleString()} projects · ${kw.toLocaleString(undefined, { maximumFractionDigits: 2 })} kW`;
+    : `${num(s?.projects ?? 0)} projects · ${numD(kw)} kW`;
 
   function exportCsv() {
     const header = ["OUR#", "Customer", eco === "rep" ? "Rep" : "Dealer", "ST", "kW", "Contract", "Stage", "Date", "Status"];
@@ -109,15 +109,15 @@ export default function Pipeline() {
    * counts *projects* missing coverage — different units, deliberately.
    */
   const tiles = [
-    { k: "Pending approval", v: c && moneyC(c.pending_cents), sub: c && `${c.pending_lines.toLocaleString()} lines`,
+    { k: "Pending approval", v: c && moneyC(c.pending_cents), sub: c && `${num(c.pending_lines)} lines`,
       tone: "pend", live: c?.pending_lines > 0, to: "/pending" },
-    { k: "Ready to pay", v: c && moneyC(c.ready_cents), sub: c && `${c.ready_lines.toLocaleString()} lines`,
+    { k: "Ready to pay", v: c && moneyC(c.ready_cents), sub: c && `${num(c.ready_lines)} lines`,
       tone: "due", live: c?.ready_lines > 0, to: "/ready" },
-    { k: "Needs rate", v: c && c.needs_rate_lines.toLocaleString(), sub: "unpriced — blocks pay",
+    { k: "Needs rate", v: c && num(c.needs_rate_lines), sub: "unpriced — blocks pay",
       tone: "held", live: c?.needs_rate_lines > 0, to: "/pending" },
-    { k: "On hold", v: c && c.on_hold_lines.toLocaleString(), sub: "held with a reason",
+    { k: "On hold", v: c && num(c.on_hold_lines), sub: "held with a reason",
       tone: "held", live: c?.on_hold_lines > 0, to: "/hold" },
-    { k: "Paid lines", v: c && c.paid_lines.toLocaleString(), sub: "settled",
+    { k: "Paid lines", v: c && num(c.paid_lines), sub: "settled",
       tone: "info", live: c?.paid_lines > 0, to: "/paid" },
   ];
 

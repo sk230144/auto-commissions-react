@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Search, Download } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload, trunc, toCents, today } from "../lib/fmt.js";
+import { moneyC, csvDownload, trunc, toCents, today, num } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Confirm, Modal, SortTh } from "../components/ui.jsx";
@@ -133,7 +133,7 @@ export default function Lines({ tab, title, eyebrow }) {
 
   const countLine = rowsQ.loading || sumQ.loading ? "loading…"
     : rowsQ.error ? "—"
-    : `${total.toLocaleString()} lines`
+    : `${num(total)} lines`
       + (sumQ.error ? "" : ` · ${moneyC(stat?.total_cents ?? 0)}`);
 
   return (
@@ -158,7 +158,7 @@ export default function Lines({ tab, title, eyebrow }) {
       <div className="pagebody">
         <div className="sub">
           {HINT[tab]}
-          {hidden > 0 && <> <b>{hidden.toLocaleString()} hidden</b> (recorded $0 or before the cutoff date).</>}
+          {hidden > 0 && <> <b>{num(hidden)} hidden</b> (recorded $0 or before the cutoff date).</>}
         </div>
 
         <div className="card">

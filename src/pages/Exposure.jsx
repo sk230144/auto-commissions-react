@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, Download } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload } from "../lib/fmt.js";
+import { moneyC, csvDownload, num } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Async, TableSkeleton, Pager, SortTh } from "../components/ui.jsx";
@@ -68,13 +68,13 @@ export default function Exposure() {
     { k: "Advances due (NTP draws)", v: t && moneyC(t.advances_due_cents), tone: "pend", live: t?.advances_due_cents > 0 },
     { k: "Pipeline commission", v: t && moneyC(t.pipeline_commission_cents), tone: "due", live: t?.pipeline_commission_cents > 0 },
     { k: "Exposure % of pipeline", v: t && `${t.adv_pct}%`, tone: "info", live: t?.adv_pct > 0 },
-    { k: "Pre-install projects", v: t && (t.pre_install_projects ?? 0).toLocaleString(), tone: "info", live: t?.pre_install_projects > 0 },
+    { k: "Pre-install projects", v: t && num(t.pre_install_projects ?? 0), tone: "info", live: t?.pre_install_projects > 0 },
   ];
 
   return (
     <>
       <PageHead eyebrow={eco === "rep" ? "Sales Rep Pay" : "Dealer Pay"} title="Exposure"
-        count={partiesQ.loading ? "loading…" : partiesQ.error ? "—" : `${total.toLocaleString()} parties`}>
+        count={partiesQ.loading ? "loading…" : partiesQ.error ? "—" : `${num(total)} parties`}>
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>
           <Download size={14} strokeWidth={2} />Export CSV
         </button>
@@ -136,7 +136,7 @@ export default function Exposure() {
                     {rows.map((r) => (
                       <tr key={r.party}>
                         <td>{r.party}</td>
-                        <td className="r num">{(r.pre_install_projects ?? 0).toLocaleString()}</td>
+                        <td className="r num">{num(r.pre_install_projects ?? 0)}</td>
                         <td className="r num">{moneyC(r.advances_paid_cents)}</td>
                         <td className="r num">{moneyC(r.advances_due_cents)}</td>
                         <td className="r num" style={{ fontWeight: 550 }}>{moneyC(r.pipeline_commission_cents)}</td>
@@ -155,7 +155,7 @@ export default function Exposure() {
           <div className="card-h">
             <h2>Advance paid, project incomplete</h2>
             <div className="sp" />
-            {!incQ.loading && !incQ.error && <span className="count">{incTotal.toLocaleString()}</span>}
+            {!incQ.loading && !incQ.error && <span className="count">{num(incTotal)}</span>}
           </div>
           <div className="card-b flush">
             <Async q={incQ} what="paid-incomplete projects" isEmpty={!inc.length}

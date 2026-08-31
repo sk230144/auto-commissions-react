@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "../lib/store.jsx";
+import { num } from "../lib/fmt.js";
 
 export function Card({ title, children, right }) {
   return (
@@ -174,11 +175,11 @@ export function Pager({ total, limit, offset, onOffset, busy }) {
   return (
     <div className="pager">
       <span className="pager-n">
-        {offset + 1}–{Math.min(offset + limit, total)} of {total.toLocaleString()}
+        {offset + 1}–{Math.min(offset + limit, total)} of {num(total)}
       </span>
       <div className="sp" />
       <button className="btn sm" disabled={page <= 1 || busy} onClick={() => go(page - 1)}>Previous</button>
-      <span className="pager-p">Page {page} of {pages.toLocaleString()}</span>
+      <span className="pager-p">Page {page} of {num(pages)}</span>
       <button className="btn sm" disabled={page >= pages || busy} onClick={() => go(page + 1)}>Next</button>
     </div>
   );

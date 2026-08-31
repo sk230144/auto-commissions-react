@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { csvDownload } from "../lib/fmt.js";
+import { csvDownload, num } from "../lib/fmt.js";
 import { useApi } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Async, TableSkeleton, SortTh, Badge } from "../components/ui.jsx";
@@ -45,7 +45,7 @@ export default function RateGaps() {
     <>
       <PageHead eyebrow="Operations" title="Rate Gaps"
         count={q.loading ? "loading…" : q.error ? "—"
-          : `${gaps.length} gap${gaps.length === 1 ? "" : "s"} · ${affected.toLocaleString()} projects affected`}>
+          : `${gaps.length} gap${gaps.length === 1 ? "" : "s"} · ${num(affected)} projects affected`}>
         <button className="btn" onClick={exportCsv} disabled={!gaps.length}>
           <Download size={14} strokeWidth={2} />Export CSV
         </button>
@@ -56,8 +56,8 @@ export default function RateGaps() {
           Combinations with recent sales but <b>no pay-schedule row in force</b> — these deals will
           reach install and jam in Pending Approval as "needs rate". One rate-card row fixes every
           project under its combo, so the work here is {q.loading ? "…" : gaps.length} rows, not{" "}
-          {q.loading ? "…" : affected.toLocaleString()} projects.
-          {d && <> Checked <b>{(d.checked ?? 0).toLocaleString()}</b> projects
+          {q.loading ? "…" : num(affected)} projects.
+          {d && <> Checked <b>{num(d.checked ?? 0)}</b> projects
             {d.window_days ? <> from the last <b>{d.window_days}</b> days</> : null}
             {d.cutoff ? <> (since {d.cutoff})</> : null}.</>}
           {d?.truncated && <b style={{ color: "var(--pend)" }}> The list was truncated — fix these and re-check for more.</b>}

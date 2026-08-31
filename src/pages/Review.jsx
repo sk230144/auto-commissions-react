@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Download, ChevronRight, ChevronDown } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, money, csvDownload, trunc } from "../lib/fmt.js";
+import { moneyC, money, csvDownload, trunc, num } from "../lib/fmt.js";
 import { useApi } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Modal, ErrorState, SortTh } from "../components/ui.jsx";
@@ -56,7 +56,7 @@ export default function Review() {
     <>
       <PageHead title="Open Items"
         count={q.loading ? "loading…" : q.error ? "—"
-          : `${(d?.open ?? 0).toLocaleString()} open · ${moneyC(atStake)} at stake`}>
+          : `${num(d?.open ?? 0)} open · ${moneyC(atStake)} at stake`}>
         <button className="btn" onClick={exportCsv} disabled={!groups.length}>
           <Download size={14} strokeWidth={2} />Export CSV
         </button>
@@ -82,7 +82,7 @@ export default function Review() {
           <div key={g.kind} style={{ marginBottom: 26 }}>
             <div className="grp-head">
               <h2>{g.label}</h2>
-              <span className="count">{g.count.toLocaleString()} open</span>
+              <span className="count">{num(g.count)} open</span>
               {g.at_stake_cents > 0 && <span className="count">{moneyC(g.at_stake_cents)} at stake</span>}
             </div>
             {g.items.map((i) => (
@@ -277,7 +277,7 @@ function OrphanCard({ orphans }) {
         <h2>Payments with no ledger line</h2>
         <div className="sp" />
         <span className="count">
-          {orphans.payments.toLocaleString()} payments · {moneyC(orphans.amount_cents)}
+          {num(orphans.payments)} payments · {moneyC(orphans.amount_cents)}
         </span>
       </div>
       <div className="card-b">
@@ -307,7 +307,7 @@ function OrphanCard({ orphans }) {
         </div>
         {orphans.parties.length > 50 && (
           <div className="submeta" style={{ marginTop: 8 }}>
-            Showing the 50 largest of {orphans.parties.length.toLocaleString()} parties.
+            Showing the 50 largest of {num(orphans.parties.length)} parties.
           </div>
         )}
       </div>
@@ -323,7 +323,7 @@ function ResolvedCard({ rows: rowsIn, canAct, busy, onReopen }) {
       <div className="card-h">
         <h2>Resolved</h2>
         <div className="sp" />
-        <span className="count">{rows.length.toLocaleString()}</span>
+        <span className="count">{num(rows.length)}</span>
       </div>
       <div className="card-b flush">
         <div className="tblwrap" style={{ maxHeight: 420 }}>

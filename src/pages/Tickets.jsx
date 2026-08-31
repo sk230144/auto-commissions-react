@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, Plus } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { csvDownload, trunc } from "../lib/fmt.js";
+import { csvDownload, trunc, num } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Modal, Tip, SortTh } from "../components/ui.jsx";
@@ -72,7 +72,7 @@ export default function Tickets() {
     <>
       <PageHead title="Tickets"
         count={listQ.loading ? "loading…" : listQ.error ? "—"
-          : `${rows.length.toLocaleString()} shown · ${live.toLocaleString()} live`}>
+          : `${num(rows.length)} shown · ${num(live)} live`}>
         <button className="btn" onClick={exportCsv} disabled={!rows.length}>Export CSV</button>
         {canAct && (
           <button className="btn pri" onClick={() => setForm({

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search, Plus, ChevronRight, ChevronDown } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, toCents, trunc, today } from "../lib/fmt.js";
+import { moneyC, toCents, trunc, today, num } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
 import { Badge, Async, TableSkeleton, Pager, Modal, Confirm, SortTh } from "../components/ui.jsx";
@@ -86,7 +86,7 @@ export default function Advances() {
     <>
       <PageHead title="Advances"
         count={listQ.loading ? "loading…" : listQ.error ? "—"
-          : `${total.toLocaleString()} advance${total === 1 ? "" : "s"}`}>
+          : `${num(total)} advance${total === 1 ? "" : "s"}`}>
         <button className="btn" onClick={() => setRunOpen(true)}>Run payback cycle</button>
         <button className="btn pri" onClick={() => setForm({
           code: "", party: "", party_type: "dealer", principal: "",

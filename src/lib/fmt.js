@@ -1,10 +1,26 @@
-/** Money is shown to CENTS, deliberately — 286 live lines carry cents, and rounding
- *  made the display disagree with the stored and exported amount. */
-export const money = (n) =>
-  (Number(n) || 0).toLocaleString(undefined, {
-    style: "currency", currency: "USD",
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  });
+/**
+ * Money is shown to CENTS, deliberately — 286 live lines carry cents, and
+ * rounding made the display disagree with the stored and exported amount.
+ *
+ * The locale is pinned to en-US rather than the viewer's. Every figure here is
+ * US dollars from a US system, and the browser's own locale renders USD as its
+ * FOREIGN currency: en-CA and en-GB give "US$9,857.88", en-AU "USD 9,857.88",
+ * de-DE "9.857,88 $". A tester on a non-US machine saw the US prefix on every
+ * tile; the amount is the same either way, so the presentation should be too.
+ */
+const USD = new Intl.NumberFormat("en-US", {
+  style: "currency", currency: "USD",
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+export const money = (n) => USD.format(Number(n) || 0);
+
+/** Thousands separators, pinned to en-US for the same reason as `money`: a
+ *  de-DE browser renders 1281 as "1.281", which reads as a decimal. */
+const NUM = new Intl.NumberFormat("en-US");
+export const num = (n) => NUM.format(Number(n) || 0);
+/** Same, keeping up to `d` decimals — kW and the like. */
+export const numD = (n, d = 2) =>
+  new Intl.NumberFormat("en-US", { maximumFractionDigits: d }).format(Number(n) || 0);
 
 /** The API speaks integer cents, signed. Divide once, at the boundary — never
  *  let a cents figure reach a component that thinks in dollars. */

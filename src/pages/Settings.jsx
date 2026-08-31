@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Download, ArrowUp, ArrowDown, Plus, Upload, Pencil, Ban, Undo2 } from "lucide-react";
+import { Search, Download, Plus, Upload, Pencil, Ban, Undo2 } from "lucide-react";
 import { useStore } from "../lib/store.jsx";
-import { moneyC, csvDownload, trunc, toCents, today, parseCsv } from "../lib/fmt.js";
+import { moneyC, csvDownload, trunc, toCents, today, parseCsv, num } from "../lib/fmt.js";
 import { useApi, useDebounced } from "../lib/useApi.js";
 import * as api from "../lib/api.js";
-import { Badge, Async, TableSkeleton, Pager, Tip, Modal, Confirm } from "../components/ui.jsx";
+import { Badge, Async, TableSkeleton, Pager, Tip, Modal, Confirm, SortTh } from "../components/ui.jsx";
 import { PageHead } from "../App.jsx";
 import { useAuth } from "../lib/auth.jsx";
 import FilterPanel, { apiFacet } from "../components/FilterPanel.jsx";
@@ -178,7 +178,7 @@ export default function Settings({ group }) {
         return {
           key: c.name, label: c.label || c.name, field: c.name, contains: true,
           note: partial
-            ? `Ticks cover the ${rows.length} rows on this page. Use the box above to match across all ${total.toLocaleString()}.`
+            ? `Ticks cover the ${rows.length} rows on this page. Use the box above to match across all ${num(total)}.`
             : undefined,
           options: [...new Set(rows.map((r) => r[c.name]).filter((v) => v !== null && v !== ""))]
             .sort().slice(0, 200)
@@ -271,7 +271,7 @@ export default function Settings({ group }) {
   }
 
   const countLine = rowsQ.loading ? "loading…" : rowsQ.error ? "—"
-    : `${total.toLocaleString()} row${total === 1 ? "" : "s"}`
+    : `${num(total)} row${total === 1 ? "" : "s"}`
       + (d?.active_only ? ` in force on ${d.as_of}` : " (incl. expired)");
 
   return (
@@ -299,7 +299,7 @@ export default function Settings({ group }) {
                 {t.no_sheet_source && <Tip text="Introduced by the app — never in SETTINGS.xlsx."> ★</Tip>}
               </div>
               <div className="c">
-                {t.count === null ? "–" : `${t.count.toLocaleString()} rows`}
+                {t.count === null ? "–" : `${num(t.count)} rows`}
                 {t.readonly && " · read-only"}
               </div>
             </button>
@@ -363,20 +363,18 @@ export default function Settings({ group }) {
                 <table>
                   <thead>
                     <tr>
-                      {cols.map((c) => {
-                        const on = sort?.column === c.name;
-                        return (
-                          <th key={c.name} onClick={() => toggleSort(c.name)}
-                            className={isNum(c.kind) ? "r" : ""}
-                            style={{ cursor: "pointer", whiteSpace: "nowrap" }}
-                            title={`Sort by ${c.label || c.name}`}>
-                            {c.label || c.name}
-                            {on && (sort.dir === "asc"
-                              ? <ArrowUp size={11} style={{ marginLeft: 4, verticalAlign: -1 }} />
-                              : <ArrowDown size={11} style={{ marginLeft: 4, verticalAlign: -1 }} />)}
-                          </th>
-                        );
-                      })}
+                      {/* SortTh speaks {k, dir}; this page's state is
+                          {column, dir} because that is what the API takes —
+                          so it is adapted here rather than renamed. Using the
+                          shared header means every column shows the ↕ hint,
+                          not just the one already sorted. */}
+                      {cols.map((c) => (
+                        <SortTh key={c.name} k={c.name} onSort={toggleSort}
+                          sort={sort ? { k: sort.column, dir: sort.dir } : null}
+                          className={isNum(c.kind) ? "r" : ""}>
+                          {c.label || c.name}
+                        </SortTh>
+                      ))}
                       {mayEdit && <th className="r" style={{ width: 1 }} aria-label="Actions" />}
                     </tr>
                   </thead>
@@ -420,8 +418,8 @@ export default function Settings({ group }) {
             setImporting(false);
             // inserted 0 + skips means the server's "every row already exists".
             say(n
-              ? `${n.toLocaleString()} row${n === 1 ? "" : "s"} imported into ${d.label}`
-                + (skipped ? ` · ${skipped.toLocaleString()} duplicate${skipped === 1 ? "" : "s"} skipped` : "")
+              ? `${num(n)} row${n === 1 ? "" : "s"} imported into ${d.label}`
+                + (skipped ? ` · ${num(skipped)} duplicate${skipped === 1 ? "" : "s"} skipped` : "")
               : "Every row in that file already exists — nothing was added.", !n);
             rowsQ.reload(); tabsQ.reload();
           }} />
@@ -771,7 +769,7 @@ function BulkImportDialog({ rail, table, label, cols, onClose, onDone }) {
           <div className="errstate-h" style={{ marginBottom: 3 }}>{failure.message}</div>
           <div className="errstate-m" style={{ margin: 0 }}>
             {failure.inserted > 0
-              ? `The ${failure.inserted.toLocaleString()} rows from earlier parts are already in. Fix the lines below and re-import the whole file — rows already added are skipped as duplicates, never doubled.`
+              ? `The ${num(failure.inserted)} rows from earlier parts are already in. Fix the lines below and re-import the whole file — rows already added are skipped as duplicates, never doubled.`
               : "Nothing was written. Fix the lines below and import again."}
             {failure.report?.hint ? ` ${failure.report.hint}` : ""}
           </div>
