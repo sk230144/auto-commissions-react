@@ -120,9 +120,12 @@ export default function Lines({ tab, title, eyebrow }) {
   }
 
   function exportCsv() {
-    const header = ["OUR#", "Payee", "Dealer", "Kind", "Milestone", "Date", "Amount", "Settled", "Balance", "Tab"];
-    const body = rows.map((l) => [l.our_reference, l.party, l.dealer, l.kind, l.trigger, l.trigger_date || "",
-      (l.amount_cents / 100).toFixed(2), (l.settled_cents / 100).toFixed(2), (l.balance_cents / 100).toFixed(2), l.tab]);
+    const header = ["OUR#", "Home owner", "Payee", "Dealer", "Kind", "Milestone", "Date", "Sale date", "ST",
+      "Amount", "Settled", "Balance", "Expected pay", "Tab"];
+    const body = rows.map((l) => [l.our_reference, l.home_owner || "", l.party, l.dealer, l.kind,
+      l.trigger, l.trigger_date || "", l.sale_date || "", l.state || "",
+      (l.amount_cents / 100).toFixed(2), (l.settled_cents / 100).toFixed(2), (l.balance_cents / 100).toFixed(2),
+      l.expected_pay || "", l.tab]);
     csvDownload(`${eco} ${tab}`, header, body)
       ? say(`Exported ${rows.length} rows (this page)`)
       : say("Nothing to export", true);
@@ -179,7 +182,7 @@ export default function Lines({ tab, title, eyebrow }) {
 
           <div className="card-b flush">
             <Async q={rowsQ} what="these lines" isEmpty={!rows.length}
-              skeleton={<TableSkeleton cols={canBatch ? 9 : 8} />}
+              skeleton={<TableSkeleton cols={canBatch ? 11 : 10} />}
               empty={search || filterCount ? "No lines match those filters." : "No lines in this queue."}>
               <div className={"tblwrap" + (rowsQ.refreshing || busy ? " refreshing" : "")}>
                 <table>
@@ -200,6 +203,11 @@ export default function Lines({ tab, title, eyebrow }) {
                       <SortTh k="trigger_date" sort={sort} onSort={onSort}>
                         {tab === "payment_records" ? "Settled on" : "Milestone"}
                       </SortTh>
+                      <SortTh k="sale_date" sort={sort} onSort={onSort}>Sale date</SortTh>
+                      <SortTh k="state" sort={sort} onSort={onSort}>ST</SortTh>
+                      {/* Server-derived ("—" / "after approval" / "next pay run"), and the
+                          server ignores it as a sort_by — so a plain header, not a SortTh. */}
+                      {tab === "pending_approval" && <th>Expected pay</th>}
                       <th />
                     </tr>
                   </thead>
@@ -214,6 +222,8 @@ export default function Lines({ tab, title, eyebrow }) {
                         </td>}
                         <td className="id">
                           <a href="#" onClick={(e) => { e.preventDefault(); setOpen(l.our_reference); }}>{l.our_reference}</a>
+                          {/* Blank on most of staging, but a real field — shown when the tape has it. */}
+                          {l.home_owner && <div className="submeta" title={l.home_owner}>{trunc(l.home_owner, 20)}</div>}
                         </td>
                         <td>
                           <span title={l.party}>{trunc(l.party, 24)}</span>
@@ -240,6 +250,13 @@ export default function Lines({ tab, title, eyebrow }) {
                               <div className="submeta">{l.trigger_date || "no date"}</div>
                             </>}
                         </td>
+                        <td>{l.sale_date || <span className="gap">—</span>}</td>
+                        <td className="mono">{l.state || <span className="gap">—</span>}</td>
+                        {tab === "pending_approval" && (
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            {l.expected_pay || <span className="gap">—</span>}
+                          </td>
+                        )}
                         <td className="r">
                           <div className="row" style={{ justifyContent: "flex-end", flexWrap: "nowrap", gap: 6 }}>
                             {l.needs_rate && <Badge kind="bad"><span className="pip" />needs rate</Badge>}
@@ -276,8 +293,6 @@ export default function Lines({ tab, title, eyebrow }) {
                             {tab === "payment_records" && <Badge kind="ok"><span className="pip" />settled</Badge>}
                           </div>
                           {l.deny_reason && <div className="submeta" style={{ color: "var(--held)" }}>{l.deny_reason}</div>}
-                          {!l.needs_rate && l.expected_pay && tab === "pending_approval" &&
-                            <div className="submeta">pays {l.expected_pay}</div>}
                         </td>
                       </tr>
                     ))}

@@ -66,7 +66,6 @@ export default function Pipeline() {
   const rows = sortRows(rowsQ.data?.projects || [], sort, {
     kw: (r) => r.system_size_watts || null,
     date: (r) => r.ntp_date || r.sale_date || null,
-    rate: (r) => (r.rate_covered ? 1 : 0),
   });
   const total = rowsQ.data?.total ?? 0;
   const s = sumQ.data;
@@ -91,30 +90,17 @@ export default function Pipeline() {
     : `${(s?.projects ?? 0).toLocaleString()} projects · ${kw.toLocaleString(undefined, { maximumFractionDigits: 2 })} kW`;
 
   function exportCsv() {
-    const header = ["OUR#", "Customer", eco === "rep" ? "Rep" : "Dealer", "ST", "kW", "Contract", "Stage", "Date", "Status", "Rate ready"];
+    const header = ["OUR#", "Customer", eco === "rep" ? "Rep" : "Dealer", "ST", "kW", "Contract", "Stage", "Date", "Status"];
     const body = rows.map((r) => [
       r.our_reference, r.customer_name, eco === "rep" ? r.rep : r.dealer, r.state,
       r.system_size_watts ? (r.system_size_watts / 1000).toFixed(2) : "",
       r.contract_amount_cents != null ? (r.contract_amount_cents / 100).toFixed(2) : "",
       r.milestone, r.ntp_date || r.sale_date || "", r.project_status,
-      r.rate_covered ? "yes" : r.rate_gap || "NO RATE",
     ]);
     csvDownload(`${eco} pipeline`, header, body)
       ? say(`Exported ${rows.length} rows (this page)`)
       : say("Nothing to export", true);
   }
-
-  const rateCell = (r) => r.rate_covered
-    ? (
-      <Tip text="A rate card is in force for this deal on its sale date.">
-        <Badge kind="ok"><span className="pip" />ready</Badge>
-      </Tip>
-    ) : (
-      <Tip
-        text={r.rate_gap ? `Cannot be priced — ${r.rate_gap}` : "Cannot be priced — no rate card in force."}>
-        <Badge kind="bad"><span className="pip" />{trunc(r.rate_gap || "no rate", 34)}</Badge>
-      </Tip>
-    );
 
   /**
    * The KPI strip is about MONEY and covers the whole eco, so it comes from
@@ -161,7 +147,6 @@ export default function Pipeline() {
         <div className="sub">
           Active, jeopardy and hold projects <b>not yet installed</b>. Nothing is priced until
           the install milestone fires, at which point the commission lands in Pending Approval.
-          <b> Rate ready</b> says whether a rate card is in force for that deal on its sale date.
           {s?.excluded_no_dealer > 0 && <> <b>{s.excluded_no_dealer}</b> record
             {s.excluded_no_dealer === 1 ? "" : "s"} with no dealer hidden.</>}
           {s?.needs_rate_partial && <> Rate coverage is <b>partially computed</b> — some rows may be unchecked.</>}
@@ -205,7 +190,6 @@ export default function Pipeline() {
                       <SortTh k="contract_amount_cents" sort={sort} onSort={onSort} className="r" pageOnly>Contract</SortTh>
                       <SortTh k="date" sort={sort} onSort={onSort} pageOnly>Stage</SortTh>
                       <SortTh k="project_status" sort={sort} onSort={onSort} pageOnly>Status</SortTh>
-                      <SortTh k="rate" sort={sort} onSort={onSort} pageOnly>Rate ready</SortTh>
                     </tr>
                   </thead>
                   <tbody>
@@ -244,7 +228,6 @@ export default function Pipeline() {
                             <span className="pip" />{r.project_status}
                           </Badge>
                         </td>
-                        <td>{rateCell(r)}</td>
                       </tr>
                     ))}
                   </tbody>
