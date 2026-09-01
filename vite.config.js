@@ -6,10 +6,10 @@ import react from "@vitejs/plugin-react";
  * even though the server answers curl fine. Requests therefore go to the
  * same-origin path /__api, which is proxied in both environments:
  *   · here, in dev
- *   · by vercel.json's rewrite, in production
+ *   · by the Cloudflare Worker (worker/index.js), in production
  *
  * VITE_API_BASE_URL is where the dev proxy points; the production target is
- * the URL in vercel.json.
+ * API_ORIGIN in worker/index.js.
  */
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");

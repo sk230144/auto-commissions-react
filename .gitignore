@@ -10,4 +10,5 @@ Thumbs.db
 .env.*.local
 
 .vercel
+.wrangler
 *.log

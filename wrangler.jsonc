@@ -1,0 +1,19 @@
+// Cloudflare deployment config (the Cloudflare equivalent of vercel.json).
+// Deploy with: npm run deploy  (first time: npx wrangler login)
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "auto-commissions",
+  // It@ourworldenergy.com's account (the login has access to two accounts).
+  "account_id": "5e99f0578b4db40e6c3f9c86ceb6ad4d",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // Unknown paths get index.html — replaces vercel.json's "/(.*)" rewrite.
+    "not_found_handling": "single-page-application",
+    // Only /__api/* hits the Worker script; every other request is served
+    // straight from the static assets without a Worker invocation.
+    "run_worker_first": ["/__api/*"]
+  }
+}
